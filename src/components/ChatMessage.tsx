@@ -16,6 +16,14 @@ interface ChatMessageProps {
 const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
   const isUser = message.role === 'user';
   
+  // Function to detect if text contains Persian characters
+  const containsPersian = (text: string) => {
+    const persianRegex = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+    return persianRegex.test(text);
+  };
+
+  const hasPersianText = containsPersian(message.content);
+  
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} animate-fadeIn`}>
       <div
@@ -29,7 +37,14 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
           }
         `}
       >
-        <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+        <div 
+          className="whitespace-pre-wrap break-words text-sm leading-relaxed"
+          dir={hasPersianText ? 'rtl' : 'ltr'}
+          style={{
+            textAlign: hasPersianText ? 'right' : 'left',
+            unicodeBidi: 'plaintext'
+          }}
+        >
           {message.content}
         </div>
         
@@ -50,6 +65,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
             text-xs mt-2 opacity-70
             ${isUser ? 'text-blue-100' : 'text-gray-400'}
           `}
+          dir={hasPersianText ? 'rtl' : 'ltr'}
         >
           {message.timestamp.toLocaleTimeString([], {
             hour: '2-digit',
