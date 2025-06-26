@@ -1,12 +1,13 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Image } from 'lucide-react';
+import { Send, Image, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import ChatMessage from './ChatMessage';
+import ChatSidebar from './ChatSidebar';
 import { useToast } from '@/hooks/use-toast';
 
 interface Message {
@@ -15,6 +16,14 @@ interface Message {
   role: 'user' | 'assistant';
   timestamp: Date;
   imageUrl?: string;
+}
+
+interface ChatSession {
+  id: string;
+  title: string;
+  timestamp: Date;
+  messages: Message[];
+  isActive: boolean;
 }
 
 const ChatInterface = () => {
@@ -31,6 +40,9 @@ const ChatInterface = () => {
   const [apiKey, setApiKey] = useState('');
   const [selectedModel, setSelectedModel] = useState('gpt-4o');
   const [imageMode, setImageMode] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string>('default');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -77,6 +89,70 @@ const ChatInterface = () => {
       console.error('Error generating image:', error);
       throw error;
     }
+  };
+
+  const generateSessionTitle = (firstMessage: string) => {
+    return firstMessage.length > 30 
+      ? firstMessage.substring(0, 30) + '...' 
+      : firstMessage;
+  };
+
+  const saveCurrentSession = () => {
+    if (messages.length <= 1) return; // Don't save sessions with only the initial message
+
+    const sessionTitle = generateSessionTitle(
+      messages.find(m => m.role === 'user')?.content || 'New Chat'
+    );
+
+    const newSession: ChatSession = {
+      id: currentSessionId,
+      title: sessionTitle,
+      timestamp: new Date(),
+      messages: [...messages],
+      isActive: false
+    };
+
+    setChatSessions(prev => {
+      const existing = prev.find(s => s.id === currentSessionId);
+      if (existing) {
+        return prev.map(s => 
+          s.id === currentSessionId 
+            ? { ...newSession, isActive: false }
+            : { ...s, isActive: false }
+        );
+      }
+      return [...prev, newSession].map(s => ({ ...s, isActive: false }));
+    });
+  };
+
+  const startNewChat = () => {
+    saveCurrentSession();
+    
+    const newSessionId = Date.now().toString();
+    setCurrentSessionId(newSessionId);
+    setMessages([
+      {
+        id: '1',
+        content: "Hello! I'm your AI assistant. I can chat with you and generate images using DALL·E 3. How can I help you today?",
+        role: 'assistant',
+        timestamp: new Date()
+      }
+    ]);
+    setSidebarOpen(false);
+  };
+
+  const selectSession = (sessionId: string) => {
+    saveCurrentSession();
+    
+    const session = chatSessions.find(s => s.id === sessionId);
+    if (session) {
+      setCurrentSessionId(sessionId);
+      setMessages(session.messages);
+      setChatSessions(prev => 
+        prev.map(s => ({ ...s, isActive: s.id === sessionId }))
+      );
+    }
+    setSidebarOpen(false);
   };
 
   const sendMessage = async () => {
@@ -180,113 +256,136 @@ const ChatInterface = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900">
-      {/* Header */}
-      <div className="flex-shrink-0 bg-gray-800 border-b border-gray-700 p-4">
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-2xl font-bold text-white mb-3">AI Chat Assistant</h1>
-          <div className="flex gap-2 mb-3">
-            <Input
-              type="password"
-              placeholder="Enter your OpenAI API key..."
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              className="flex-1 bg-gray-700 border-gray-600 text-white placeholder-gray-400"
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-gray-600 text-gray-300 hover:bg-gray-700"
-              onClick={() => {
-                setApiKey('');
-                toast({
-                  title: "API Key Cleared",
-                  description: "Your API key has been removed."
-                });
-              }}
-            >
-              Clear
-            </Button>
-          </div>
-          
-          {/* Model Selector and Image Mode Toggle */}
-          <div className="flex gap-4 items-center">
-            <div className="flex items-center gap-2">
-              <Label htmlFor="model-select" className="text-gray-300 text-sm">Model:</Label>
-              <Select value={selectedModel} onValueChange={setSelectedModel}>
-                <SelectTrigger id="model-select" className="w-40 bg-gray-700 border-gray-600 text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-gray-700 border-gray-600">
-                  <SelectItem value="gpt-4o" className="text-white hover:bg-gray-600">gpt-4o</SelectItem>
-                  <SelectItem value="gpt-3.5-turbo" className="text-white hover:bg-gray-600">gpt-3.5-turbo</SelectItem>
-                </SelectContent>
-              </Select>
+    <div className="flex h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900">
+      {/* Main Chat Area */}
+      <div className="flex flex-col flex-1">
+        {/* Header */}
+        <div className="flex-shrink-0 bg-gray-800 border-b border-gray-700 p-4">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex items-center justify-between mb-3">
+              <h1 className="text-2xl font-bold text-white">AI Chat Assistant</h1>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="text-gray-400 hover:text-white"
+              >
+                <Menu className="w-5 h-5" />
+              </Button>
             </div>
             
-            <div className="flex items-center gap-2">
-              <Label htmlFor="image-mode" className="text-gray-300 text-sm flex items-center gap-1">
-                <Image className="w-4 h-4" />
-                Image Mode:
-              </Label>
-              <Switch
-                id="image-mode"
-                checked={imageMode}
-                onCheckedChange={setImageMode}
+            <div className="flex gap-2 mb-3">
+              <Input
+                type="password"
+                placeholder="Enter your OpenAI API key..."
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                className="flex-1 bg-gray-700 border-gray-600 text-white placeholder-gray-400"
               />
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-gray-600 text-gray-300 hover:bg-gray-700"
+                onClick={() => {
+                  setApiKey('');
+                  toast({
+                    title: "API Key Cleared",
+                    description: "Your API key has been removed."
+                  });
+                }}
+              >
+                Clear
+              </Button>
             </div>
+            
+            {/* Model Selector and Image Mode Toggle */}
+            <div className="flex gap-4 items-center">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="model-select" className="text-gray-300 text-sm">Model:</Label>
+                <Select value={selectedModel} onValueChange={setSelectedModel}>
+                  <SelectTrigger id="model-select" className="w-40 bg-gray-700 border-gray-600 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-700 border-gray-600">
+                    <SelectItem value="gpt-4o" className="text-white hover:bg-gray-600">gpt-4o</SelectItem>
+                    <SelectItem value="gpt-3.5-turbo" className="text-white hover:bg-gray-600">gpt-3.5-turbo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <Label htmlFor="image-mode" className="text-gray-300 text-sm flex items-center gap-1">
+                  <Image className="w-4 h-4" />
+                  Image Mode:
+                </Label>
+                <Switch
+                  id="image-mode"
+                  checked={imageMode}
+                  onCheckedChange={setImageMode}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="max-w-4xl mx-auto space-y-4">
+            {messages.map((message) => (
+              <ChatMessage key={message.id} message={message} />
+            ))}
+            {isLoading && (
+              <div className="flex justify-start">
+                <div className="bg-gray-700 rounded-lg p-4 max-w-xs sm:max-w-md">
+                  <div className="flex space-x-2">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+        </div>
+
+        {/* Input */}
+        <div className="flex-shrink-0 bg-gray-800 border-t border-gray-700 p-4">
+          <div className="max-w-4xl mx-auto">
+            <form onSubmit={handleSubmit} className="flex gap-2">
+              <Input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder={imageMode ? "Describe the image you want to generate..." : "Type your message..."}
+                disabled={isLoading}
+                className="flex-1 bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500"
+              />
+              <Button
+                type="submit"
+                disabled={isLoading || !input.trim()}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            </form>
+            {imageMode && (
+              <p className="text-xs text-gray-400 mt-1">
+                Image Mode is active - your message will be used to generate an image
+              </p>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="max-w-4xl mx-auto space-y-4">
-          {messages.map((message) => (
-            <ChatMessage key={message.id} message={message} />
-          ))}
-          {isLoading && (
-            <div className="flex justify-start">
-              <div className="bg-gray-700 rounded-lg p-4 max-w-xs sm:max-w-md">
-                <div className="flex space-x-2">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                </div>
-              </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-      </div>
-
-      {/* Input */}
-      <div className="flex-shrink-0 bg-gray-800 border-t border-gray-700 p-4">
-        <div className="max-w-4xl mx-auto">
-          <form onSubmit={handleSubmit} className="flex gap-2">
-            <Input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder={imageMode ? "Describe the image you want to generate..." : "Type your message..."}
-              disabled={isLoading}
-              className="flex-1 bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500"
-            />
-            <Button
-              type="submit"
-              disabled={isLoading || !input.trim()}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Send className="w-4 h-4" />
-            </Button>
-          </form>
-          {imageMode && (
-            <p className="text-xs text-gray-400 mt-1">
-              Image Mode is active - your message will be used to generate an image
-            </p>
-          )}
-        </div>
-      </div>
+      {/* Right Sidebar */}
+      <ChatSidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        sessions={chatSessions}
+        onNewChat={startNewChat}
+        onSelectSession={selectSession}
+      />
     </div>
   );
 };
