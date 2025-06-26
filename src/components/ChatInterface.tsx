@@ -1,8 +1,11 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send } from 'lucide-react';
+import { Send, Image } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import ChatMessage from './ChatMessage';
 import { useToast } from '@/hooks/use-toast';
 
@@ -11,13 +14,14 @@ interface Message {
   content: string;
   role: 'user' | 'assistant';
   timestamp: Date;
+  imageUrl?: string;
 }
 
 const ChatInterface = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      content: "Hello! I'm your AI assistant. How can I help you today?",
+      content: "Hello! I'm your AI assistant. I can chat with you and generate images using DALL·E 3. How can I help you today?",
       role: 'assistant',
       timestamp: new Date()
     }
@@ -25,8 +29,13 @@ const ChatInterface = () => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [apiKey, setApiKey] = useState('');
+  const [selectedModel, setSelectedModel] = useState('gpt-4o');
+  const [imageMode, setImageMode] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+
+  // Image generation keywords for automatic detection
+  const imageKeywords = ['generate an image of', 'create an image', 'draw', 'illustrate', 'make a picture', 'generate image'];
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -35,6 +44,40 @@ const ChatInterface = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  const isImageRequest = (text: string) => {
+    const lowerText = text.toLowerCase();
+    return imageKeywords.some(keyword => lowerText.includes(keyword));
+  };
+
+  const generateImage = async (prompt: string) => {
+    try {
+      const response = await fetch('https://api.openai.com/v1/images/generations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'dall-e-3',
+          prompt: prompt,
+          n: 1,
+          size: '1024x1024',
+          quality: 'standard'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Image generation failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.data[0]?.url;
+    } catch (error) {
+      console.error('Error generating image:', error);
+      throw error;
+    }
+  };
 
   const sendMessage = async () => {
     if (!input.trim()) return;
@@ -60,41 +103,60 @@ const ChatInterface = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'gpt-3.5-turbo',
-          messages: [
-            ...messages.map(msg => ({
-              role: msg.role,
-              content: msg.content
-            })),
-            { role: 'user', content: userMessage.content }
-          ],
-          max_tokens: 1000,
-          temperature: 0.7
-        })
-      });
+      // Determine if this should be an image generation request
+      const shouldGenerateImage = imageMode || isImageRequest(input.trim());
 
-      if (!response.ok) {
-        throw new Error(`API request failed: ${response.status}`);
+      if (shouldGenerateImage) {
+        // Generate image using DALL·E 3
+        const imageUrl = await generateImage(input.trim());
+        
+        const assistantMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          content: `I've generated an image based on your prompt: "${input.trim()}"`,
+          role: 'assistant',
+          timestamp: new Date(),
+          imageUrl: imageUrl
+        };
+
+        setMessages(prev => [...prev, assistantMessage]);
+      } else {
+        // Regular chat completion
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: selectedModel,
+            messages: [
+              ...messages.map(msg => ({
+                role: msg.role,
+                content: msg.content
+              })),
+              { role: 'user', content: userMessage.content }
+            ],
+            max_tokens: 1000,
+            temperature: 0.7
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`API request failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const assistantMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          content: data.choices[0]?.message?.content || 'Sorry, I could not generate a response.',
+          role: 'assistant',
+          timestamp: new Date()
+        };
+
+        setMessages(prev => [...prev, assistantMessage]);
       }
-
-      const data = await response.json();
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: data.choices[0]?.message?.content || 'Sorry, I could not generate a response.',
-        role: 'assistant',
-        timestamp: new Date()
-      };
-
-      setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
-      console.error('Error calling OpenAI API:', error);
+      console.error('Error:', error);
       toast({
         title: "Error",
         description: "Failed to get response from AI. Please check your API key and try again.",
@@ -123,7 +185,7 @@ const ChatInterface = () => {
       <div className="flex-shrink-0 bg-gray-800 border-b border-gray-700 p-4">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-2xl font-bold text-white mb-3">AI Chat Assistant</h1>
-          <div className="flex gap-2">
+          <div className="flex gap-2 mb-3">
             <Input
               type="password"
               placeholder="Enter your OpenAI API key..."
@@ -145,6 +207,34 @@ const ChatInterface = () => {
             >
               Clear
             </Button>
+          </div>
+          
+          {/* Model Selector and Image Mode Toggle */}
+          <div className="flex gap-4 items-center">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="model-select" className="text-gray-300 text-sm">Model:</Label>
+              <Select value={selectedModel} onValueChange={setSelectedModel}>
+                <SelectTrigger id="model-select" className="w-40 bg-gray-700 border-gray-600 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-700 border-gray-600">
+                  <SelectItem value="gpt-4o" className="text-white hover:bg-gray-600">gpt-4o</SelectItem>
+                  <SelectItem value="gpt-3.5-turbo" className="text-white hover:bg-gray-600">gpt-3.5-turbo</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <Label htmlFor="image-mode" className="text-gray-300 text-sm flex items-center gap-1">
+                <Image className="w-4 h-4" />
+                Image Mode:
+              </Label>
+              <Switch
+                id="image-mode"
+                checked={imageMode}
+                onCheckedChange={setImageMode}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -178,7 +268,7 @@ const ChatInterface = () => {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Type your message..."
+              placeholder={imageMode ? "Describe the image you want to generate..." : "Type your message..."}
               disabled={isLoading}
               className="flex-1 bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500"
             />
@@ -190,6 +280,11 @@ const ChatInterface = () => {
               <Send className="w-4 h-4" />
             </Button>
           </form>
+          {imageMode && (
+            <p className="text-xs text-gray-400 mt-1">
+              Image Mode is active - your message will be used to generate an image
+            </p>
+          )}
         </div>
       </div>
     </div>

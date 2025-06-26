@@ -6,6 +6,7 @@ interface Message {
   content: string;
   role: 'user' | 'assistant';
   timestamp: Date;
+  imageUrl?: string;
 }
 
 interface ChatMessageProps {
@@ -31,6 +32,19 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
         <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
           {message.content}
         </div>
+        
+        {/* Display generated image if available */}
+        {message.imageUrl && (
+          <div className="mt-3">
+            <img 
+              src={message.imageUrl} 
+              alt="Generated image"
+              className="rounded-lg max-w-full h-auto shadow-md"
+              style={{ maxHeight: '400px' }}
+            />
+          </div>
+        )}
+        
         <div
           className={`
             text-xs mt-2 opacity-70
