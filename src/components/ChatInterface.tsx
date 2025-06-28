@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import ChatMessage from './ChatMessage';
 import ChatSidebar from './ChatSidebar';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Message {
   id: string;
@@ -37,7 +38,6 @@ const ChatInterface = () => {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [apiKey, setApiKey] = useState('');
   const [selectedModel, setSelectedModel] = useState('gpt-4o');
   const [imageMode, setImageMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -64,26 +64,20 @@ const ChatInterface = () => {
 
   const generateImage = async (prompt: string) => {
     try {
-      const response = await fetch('https://api.openai.com/v1/images/generations', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'dall-e-3',
+      const { data, error } = await supabase.functions.invoke('generate-image', {
+        body: {
           prompt: prompt,
+          model: 'dall-e-3',
           n: 1,
           size: '1024x1024',
           quality: 'standard'
-        })
+        }
       });
 
-      if (!response.ok) {
-        throw new Error(`Image generation failed: ${response.status}`);
+      if (error) {
+        throw new Error(error.message);
       }
 
-      const data = await response.json();
       return data.data[0]?.url;
     } catch (error) {
       console.error('Error generating image:', error);
@@ -157,15 +151,6 @@ const ChatInterface = () => {
 
   const sendMessage = async () => {
     if (!input.trim()) return;
-    
-    if (!apiKey.trim()) {
-      toast({
-        title: "API Key Required",
-        description: "Please enter your OpenAI API key to continue.",
-        variant: "destructive"
-      });
-      return;
-    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -196,15 +181,9 @@ const ChatInterface = () => {
 
         setMessages(prev => [...prev, assistantMessage]);
       } else {
-        // Regular chat completion
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
-          },
-          body: JSON.stringify({
-            model: selectedModel,
+        // Regular chat completion using our Edge Function
+        const { data, error } = await supabase.functions.invoke('chat', {
+          body: {
             messages: [
               ...messages.map(msg => ({
                 role: msg.role,
@@ -212,16 +191,16 @@ const ChatInterface = () => {
               })),
               { role: 'user', content: userMessage.content }
             ],
+            model: selectedModel,
             max_tokens: 1000,
             temperature: 0.7
-          })
+          }
         });
 
-        if (!response.ok) {
-          throw new Error(`API request failed: ${response.status}`);
+        if (error) {
+          throw new Error(error.message);
         }
 
-        const data = await response.json();
         const assistantMessage: Message = {
           id: (Date.now() + 1).toString(),
           content: data.choices[0]?.message?.content || 'Sorry, I could not generate a response.',
@@ -235,7 +214,7 @@ const ChatInterface = () => {
       console.error('Error:', error);
       toast({
         title: "Error",
-        description: "Failed to get response from AI. Please check your API key and try again.",
+        description: "Failed to get response from AI. Please try again.",
         variant: "destructive"
       });
     } finally {
@@ -271,30 +250,6 @@ const ChatInterface = () => {
                 className="text-gray-400 hover:text-white"
               >
                 <Menu className="w-5 h-5" />
-              </Button>
-            </div>
-            
-            <div className="flex gap-2 mb-3">
-              <Input
-                type="password"
-                placeholder="Enter your OpenAI API key..."
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                className="flex-1 bg-gray-700 border-gray-600 text-white placeholder-gray-400"
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-gray-600 text-gray-300 hover:bg-gray-700"
-                onClick={() => {
-                  setApiKey('');
-                  toast({
-                    title: "API Key Cleared",
-                    description: "Your API key has been removed."
-                  });
-                }}
-              >
-                Clear
               </Button>
             </div>
             
