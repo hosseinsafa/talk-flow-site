@@ -78,26 +78,52 @@ serve(async (req) => {
       );
     }
 
-    // Send SMS via Kavenegar
+    // Get Kavenegar API key
     const kavenegarApiKey = Deno.env.get('KAVENEGAR_API_KEY');
+    
+    if (!kavenegarApiKey) {
+      console.error('Kavenegar API key not found');
+      return new Response(
+        JSON.stringify({ error: 'خطای پیکربندی سرویس پیامک' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
+
+    console.log('Using Kavenegar API key:', kavenegarApiKey.substring(0, 10) + '...');
+
+    // Send SMS via Kavenegar
     const kavenegarUrl = `https://api.kavenegar.com/v1/${kavenegarApiKey}/verify/lookup.json`;
+    
+    const formData = new URLSearchParams({
+      receptor: normalizedPhone,
+      token: otpCode,
+      template: 'verify'
+    });
+
+    console.log('Sending SMS to:', normalizedPhone, 'with OTP:', otpCode);
     
     const kavenegarResponse = await fetch(kavenegarUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: new URLSearchParams({
-        receptor: normalizedPhone,
-        token: otpCode,
-        template: 'verify', // You may need to adjust this based on your Kavenegar template
-      }),
+      body: formData,
     });
 
     const kavenegarResult = await kavenegarResponse.json();
+    console.log('Kavenegar response:', kavenegarResult);
     
-    if (!kavenegarResponse.ok) {
+    if (!kavenegarResponse.ok || kavenegarResult.return?.status !== 200) {
       console.error('Kavenegar error:', kavenegarResult);
+      
+      // Check if it's an API key issue
+      if (kavenegarResult.return?.status === 403) {
+        return new Response(
+          JSON.stringify({ error: 'خطا در احراز هویت سرویس پیامک' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
+      }
+      
       return new Response(
         JSON.stringify({ error: 'خطا در ارسال پیامک' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
