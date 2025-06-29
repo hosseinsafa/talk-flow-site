@@ -1,6 +1,5 @@
 
 import { useState } from 'react';
-import { useAuth } from './useAuth';
 import { useToast } from './use-toast';
 import { validateIranianPhone } from '@/utils/phoneValidation';
 import { useNavigate } from 'react-router-dom';
@@ -30,9 +29,9 @@ export const usePhoneAuth = () => {
     }
 
     try {
-      console.log('Sending OTP via Kavenegar for phone:', phoneNumber);
+      console.log('Sending OTP via phone-auth function for phone:', phoneNumber);
       
-      const { data, error } = await supabase.functions.invoke('send-otp', {
+      const { data, error } = await supabase.functions.invoke('phone-auth', {
         body: { phone_number: phoneNumber }
       });
 
@@ -77,44 +76,40 @@ export const usePhoneAuth = () => {
     setLoading(true);
 
     try {
-      console.log('Verifying OTP via edge function for phone:', phoneNumber, 'with code:', otpCode);
+      console.log('Verifying OTP via phone-auth function for phone:', phoneNumber, 'with code:', otpCode);
       
-      const { data, error } = await supabase.functions.invoke('verify-otp', {
-        body: { 
+      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/phone-auth`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabase.supabaseKey}`,
+        },
+        body: JSON.stringify({ 
           phone_number: phoneNumber,
           otp_code: otpCode
-        }
+        })
       });
 
-      if (error) {
-        console.error('Error verifying OTP:', error);
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error('Error verifying OTP:', data);
         toast({
           title: 'خطا در تأیید کد',
-          description: error.message || 'کد تأیید نامعتبر است',
+          description: data.error || 'کد تأیید نامعتبر است',
           variant: "destructive"
         });
       } else {
         console.log('OTP verified successfully:', data);
         
-        if (data.user_exists) {
-          // User exists, they should be logged in via the auth_url
-          if (data.auth_url) {
-            window.location.href = data.auth_url;
-          } else {
-            toast({
-              title: 'موفق',
-              description: 'ورود موفقیت‌آمیز'
-            });
-            navigate('/');
-          }
+        if (data.auth_url) {
+          // Redirect to auth URL to establish session
+          window.location.href = data.auth_url;
         } else {
-          // New user, need to complete profile
           toast({
             title: 'موفق',
-            description: 'تأیید موفقیت‌آمیز - لطفاً اطلاعات خود را تکمیل کنید'
+            description: data.user_exists ? 'ورود موفقیت‌آمیز' : 'ثبت‌نام و ورود موفقیت‌آمیز'
           });
-          // For now, just redirect to main page
-          // In the future, you might want to add a profile completion step
           navigate('/');
         }
       }
