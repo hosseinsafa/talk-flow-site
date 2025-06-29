@@ -32,17 +32,19 @@ serve(async (req) => {
       .single();
 
     if (fetchError || !otpRecord) {
-      // Increment attempts for this phone number - use RPC call for atomic increment
-      await supabase.rpc('increment_otp_attempts', { 
-        input_phone_number: phone_number 
-      }).catch(() => {
+      // Try to increment attempts - if it fails, use regular update
+      try {
+        await supabase.rpc('increment_otp_attempts', { 
+          input_phone_number: phone_number 
+        });
+      } catch (rpcError) {
         // If RPC doesn't exist, use regular update
-        return supabase
+        await supabase
           .from('otp_verifications')
-          .update({ attempts: otpRecord?.attempts ? otpRecord.attempts + 1 : 1 })
+          .update({ attempts: (otpRecord?.attempts || 0) + 1 })
           .eq('phone_number', phone_number)
           .eq('verified', false);
-      });
+      }
 
       return new Response(
         JSON.stringify({ error: 'کد تأیید نامعتبر یا منقضی است' }),
