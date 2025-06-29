@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useKavenegarAuth } from '@/hooks/useKavenegarAuth';
 import { Navigate } from 'react-router-dom';
 
 interface ProtectedRouteProps {
@@ -9,6 +10,7 @@ interface ProtectedRouteProps {
 
 const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   const { user, loading } = useAuth();
+  const { isAuthenticated } = useKavenegarAuth();
 
   if (loading) {
     return (
@@ -18,7 +20,8 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     );
   }
 
-  if (!user) {
+  // Allow access if user is authenticated via either Supabase Auth or Kavenegar phone auth
+  if (!user && !isAuthenticated()) {
     return <Navigate to="/auth" replace />;
   }
 

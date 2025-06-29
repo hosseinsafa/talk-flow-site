@@ -1,6 +1,6 @@
-
 import React, { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useKavenegarAuth } from '@/hooks/useKavenegarAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,8 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
-import { t } from '@/lib/localization';
-import PhoneAuth from '@/components/PhoneAuth';
+import KavenegarPhoneAuth from '@/components/KavenegarPhoneAuth';
 import { Separator } from '@/components/ui/separator';
 
 const Auth = () => {
@@ -23,14 +22,15 @@ const Auth = () => {
   const [showPhoneAuth, setShowPhoneAuth] = useState(false);
   
   const { signUp, signIn, signInWithGoogle, resetPassword, user } = useAuth();
+  const { isAuthenticated } = useKavenegarAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (user) {
+    if (user || isAuthenticated()) {
       navigate('/');
     }
-  }, [user, navigate]);
+  }, [user, isAuthenticated, navigate]);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,7 +114,7 @@ const Auth = () => {
   if (showPhoneAuth) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
-        <PhoneAuth onBack={() => setShowPhoneAuth(false)} />
+        <KavenegarPhoneAuth onBack={() => setShowPhoneAuth(false)} />
       </div>
     );
   }
@@ -169,6 +169,20 @@ const Auth = () => {
           <CardTitle className="text-white text-center">دستیار هوش مصنوعی چت</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* Phone Authentication Button */}
+          <Button 
+            onClick={() => setShowPhoneAuth(true)}
+            className="w-full bg-green-600 hover:bg-green-700"
+          >
+            📱 ورود با شماره موبایل (کاوه‌نگار)
+          </Button>
+
+          <div className="flex items-center">
+            <Separator className="flex-1 bg-gray-600" />
+            <span className="px-3 text-gray-400 text-sm">یا</span>
+            <Separator className="flex-1 bg-gray-600" />
+          </div>
+
           {/* Google Sign In Button */}
           <Button 
             onClick={handleGoogleSignIn}
@@ -182,15 +196,6 @@ const Auth = () => {
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
             </svg>
             ورود با گوگل
-          </Button>
-
-          {/* Phone Authentication Button */}
-          <Button 
-            onClick={() => setShowPhoneAuth(true)}
-            variant="outline"
-            className="w-full bg-transparent border-gray-600 text-white hover:bg-gray-700"
-          >
-            📱 ورود با شماره موبایل
           </Button>
 
           <div className="flex items-center">
