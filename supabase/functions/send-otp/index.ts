@@ -91,16 +91,17 @@ serve(async (req) => {
 
     console.log('Using Kavenegar API key:', kavenegarApiKey.substring(0, 10) + '...');
 
-    // Send SMS via Kavenegar
-    const kavenegarUrl = `https://api.kavenegar.com/v1/${kavenegarApiKey}/verify/lookup.json`;
+    // Send SMS via Kavenegar using the Send method (not verify/lookup)
+    const kavenegarUrl = `https://api.kavenegar.com/v1/${kavenegarApiKey}/sms/send.json`;
     
+    const message = `کد تأیید شما: ${otpCode}`;
     const formData = new URLSearchParams({
-      receptor: normalizedPhone,
-      token: otpCode,
-      template: 'verify'
+      receptor: normalizedPhone.replace('+98', '0'), // Convert back to 09xxxxxxxx format for Kavenegar
+      message: message,
+      sender: '2000660110' // Default Kavenegar sender number
     });
 
-    console.log('Sending SMS to:', normalizedPhone, 'with OTP:', otpCode);
+    console.log('Sending SMS to:', normalizedPhone, 'with message:', message);
     
     const kavenegarResponse = await fetch(kavenegarUrl, {
       method: 'POST',
@@ -113,19 +114,28 @@ serve(async (req) => {
     const kavenegarResult = await kavenegarResponse.json();
     console.log('Kavenegar response:', kavenegarResult);
     
-    if (!kavenegarResponse.ok || kavenegarResult.return?.status !== 200) {
-      console.error('Kavenegar error:', kavenegarResult);
+    if (!kavenegarResponse.ok) {
+      console.error('Kavenegar HTTP error:', kavenegarResponse.status, kavenegarResult);
+      return new Response(
+        JSON.stringify({ error: 'خطا در ارسال پیامک' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
+
+    // Check Kavenegar API response
+    if (kavenegarResult.return && kavenegarResult.return.status !== 200) {
+      console.error('Kavenegar API error:', kavenegarResult.return);
       
-      // Check if it's an API key issue
-      if (kavenegarResult.return?.status === 403) {
+      // Handle specific error codes
+      if (kavenegarResult.return.status === 403 || kavenegarResult.return.status === 401) {
         return new Response(
-          JSON.stringify({ error: 'خطا در احراز هویت سرویس پیامک' }),
+          JSON.stringify({ error: 'کلید API کاوه‌نگار نامعتبر است' }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
         );
       }
       
       return new Response(
-        JSON.stringify({ error: 'خطا در ارسال پیامک' }),
+        JSON.stringify({ error: `خطای کاوه‌نگار: ${kavenegarResult.return.message || 'خطای نامشخص'}` }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
