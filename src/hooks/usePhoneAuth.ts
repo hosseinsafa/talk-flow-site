@@ -78,25 +78,18 @@ export const usePhoneAuth = () => {
     try {
       console.log('Verifying OTP via phone-auth function for phone:', phoneNumber, 'with code:', otpCode);
       
-      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/phone-auth`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabase.supabaseKey}`,
-        },
-        body: JSON.stringify({ 
+      const { data, error } = await supabase.functions.invoke('phone-auth', {
+        body: { 
           phone_number: phoneNumber,
           otp_code: otpCode
-        })
+        }
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        console.error('Error verifying OTP:', data);
+      if (error) {
+        console.error('Error verifying OTP:', error);
         toast({
           title: 'خطا در تأیید کد',
-          description: data.error || 'کد تأیید نامعتبر است',
+          description: error.message || 'کد تأیید نامعتبر است',
           variant: "destructive"
         });
       } else {
