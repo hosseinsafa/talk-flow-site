@@ -1,8 +1,8 @@
-
 import { useState } from 'react';
 import { useAuth } from './useAuth';
 import { useToast } from './use-toast';
 import { validateIranianPhone } from '@/utils/phoneValidation';
+import { useNavigate } from 'react-router-dom';
 
 export const usePhoneAuth = () => {
   const [step, setStep] = useState<'phone' | 'otp' | 'complete'>('phone');
@@ -14,6 +14,7 @@ export const usePhoneAuth = () => {
   
   const { sendOtp, verifyOtp, completePhoneSignUp } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,6 +114,11 @@ export const usePhoneAuth = () => {
         title: 'موفق',
         description: 'حساب شما با موفقیت ایجاد شد'
       });
+      
+      // Redirect to main page after successful registration
+      setTimeout(() => {
+        navigate('/');
+      }, 1500);
     }
     
     setLoading(false);
