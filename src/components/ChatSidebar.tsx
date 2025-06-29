@@ -3,6 +3,7 @@ import React from 'react';
 import { Plus, MessageSquare, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { t } from '@/lib/localization';
 
 interface ChatSession {
   id: string;
@@ -39,9 +40,9 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
       {/* Sidebar */}
       <div
         className={`
-          fixed right-0 top-0 h-full w-80 bg-gray-800 border-l border-gray-700 
+          fixed left-0 top-0 h-full w-80 bg-gray-800 border-r border-gray-700 
           transform transition-transform duration-300 ease-in-out z-50
-          ${isOpen ? 'translate-x-0' : 'translate-x-full'}
+          ${isOpen ? 'translate-x-0' : '-translate-x-full'}
           md:relative md:translate-x-0 md:z-auto
           ${isOpen ? 'md:block' : 'md:hidden'}
         `}
@@ -49,7 +50,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
         <div className="flex flex-col h-full">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-gray-700">
-            <h2 className="text-lg font-semibold text-white">Chat History</h2>
+            <h2 className="text-lg font-semibold text-white">{t.chat.chatHistory}</h2>
             <Button
               variant="ghost"
               size="icon"
@@ -66,8 +67,8 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
               onClick={onNewChat}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white"
             >
-              <Plus className="w-4 h-4 mr-2" />
-              New Chat
+              <Plus className="w-4 h-4 ml-2" />
+              {t.chat.newChat}
             </Button>
           </div>
 
@@ -77,7 +78,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
               {sessions.length === 0 ? (
                 <div className="text-center text-gray-400 py-8">
                   <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">No chat history yet</p>
+                  <p className="text-sm">{t.chat.noHistory}</p>
                 </div>
               ) : (
                 sessions.map((session) => (
@@ -85,18 +86,18 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
                     key={session.id}
                     onClick={() => onSelectSession(session.id)}
                     className={`
-                      w-full p-3 rounded-lg text-left transition-colors
+                      w-full p-3 rounded-lg text-right transition-colors
                       ${session.isActive 
                         ? 'bg-blue-600 text-white' 
                         : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                       }
                     `}
                   >
-                    <div className="font-medium text-sm mb-1 truncate">
+                    <div className="font-medium text-sm mb-1 truncate" dir="rtl">
                       {session.title}
                     </div>
                     <div className="text-xs opacity-70">
-                      {session.timestamp.toLocaleDateString([], {
+                      {session.timestamp.toLocaleDateString('fa-IR', {
                         month: 'short',
                         day: 'numeric',
                         hour: '2-digit',

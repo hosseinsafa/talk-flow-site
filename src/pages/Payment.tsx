@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
-import { CreditCard, Check, ArrowLeft } from 'lucide-react';
+import { CreditCard, Check, ArrowRight } from 'lucide-react';
+import { t } from '@/lib/localization';
 
 const Payment = () => {
   const { user } = useAuth();
@@ -29,8 +30,8 @@ const Payment = () => {
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       toast({
-        title: "Payment Successful!",
-        description: "Your plan has been upgraded to Pro. Redirecting to account page...",
+        title: t.payment.paymentSuccessful,
+        description: t.payment.planUpgraded,
       });
       
       setTimeout(() => {
@@ -40,8 +41,8 @@ const Payment = () => {
     } catch (error) {
       console.error('Payment error:', error);
       toast({
-        title: "Payment Failed",
-        description: "There was an error processing your payment. Please try again.",
+        title: t.payment.paymentFailed,
+        description: t.payment.paymentError,
         variant: "destructive"
       });
     } finally {
@@ -51,31 +52,19 @@ const Payment = () => {
 
   const plans = [
     {
-      name: 'Free',
+      name: t.account.freePlan,
       price: '0',
-      currency: 'تومان',
-      period: 'month',
-      features: [
-        '50 chat messages per month',
-        '5 image generations per month',
-        'Basic AI models',
-        'Standard support'
-      ],
+      currency: t.payment.toman,
+      period: t.payment.month,
+      features: t.payment.features.free,
       current: true
     },
     {
-      name: 'Pro',
+      name: t.account.proPlan,
       price: '99,000',
-      currency: 'تومان',
-      period: 'month',
-      features: [
-        '1,000 chat messages per month',
-        '100 image generations per month',
-        'Premium AI models (GPT-4o)',
-        'Priority support',
-        'Advanced image quality',
-        'No ads'
-      ],
+      currency: t.payment.toman,
+      period: t.payment.month,
+      features: t.payment.features.pro,
       popular: true
     }
   ];
@@ -90,12 +79,12 @@ const Payment = () => {
             variant="ghost" 
             className="text-gray-400 hover:text-white"
           >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Account
+            <ArrowRight className="w-4 h-4 ml-2" />
+            {t.payment.backToAccount}
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-white">Choose Your Plan</h1>
-            <p className="text-gray-400">Upgrade to unlock premium features</p>
+            <h1 className="text-3xl font-bold text-white">{t.payment.title}</h1>
+            <p className="text-gray-400">{t.payment.subtitle}</p>
           </div>
         </div>
 
@@ -110,7 +99,7 @@ const Payment = () => {
             >
               {plan.popular && (
                 <Badge className="absolute -top-2 left-1/2 transform -translate-x-1/2 bg-blue-600">
-                  Most Popular
+                  {t.payment.mostPopular}
                 </Badge>
               )}
               
@@ -118,7 +107,7 @@ const Payment = () => {
                 <CardTitle className="text-white text-2xl">{plan.name}</CardTitle>
                 <div className="text-3xl font-bold text-white mt-2">
                   {plan.price}
-                  <span className="text-lg font-normal text-gray-400 ml-1">
+                  <span className="text-lg font-normal text-gray-400 mr-1">
                     {plan.currency}/{plan.period}
                   </span>
                 </div>
@@ -140,7 +129,7 @@ const Payment = () => {
                     variant="outline" 
                     disabled
                   >
-                    Current Plan
+                    {t.payment.currentPlan}
                   </Button>
                 ) : (
                   <Button 
@@ -148,8 +137,8 @@ const Payment = () => {
                     onClick={() => handlePayment('pro')}
                     disabled={loading}
                   >
-                    <CreditCard className="w-4 h-4 mr-2" />
-                    {loading ? 'Processing...' : 'Upgrade Now'}
+                    <CreditCard className="w-4 h-4 ml-2" />
+                    {loading ? t.payment.processing : t.payment.upgradeNow}
                   </Button>
                 )}
               </CardContent>
@@ -160,19 +149,18 @@ const Payment = () => {
         {/* Payment Info */}
         <Card className="mt-8 bg-gray-800 border-gray-700">
           <CardHeader>
-            <CardTitle className="text-white">Payment Information</CardTitle>
+            <CardTitle className="text-white">{t.payment.paymentInfo}</CardTitle>
           </CardHeader>
           <CardContent className="text-gray-300">
             <div className="space-y-3">
-              <p>✅ Secure payment processing</p>
-              <p>✅ 30-day money-back guarantee</p>
-              <p>✅ Cancel anytime</p>
-              <p>✅ Instant activation</p>
+              <p>✅ {t.payment.securePayment}</p>
+              <p>✅ {t.payment.moneyBack}</p>
+              <p>✅ {t.payment.cancelAnytime}</p>
+              <p>✅ {t.payment.instantActivation}</p>
             </div>
             <div className="mt-4 p-4 bg-gray-700 rounded-lg">
               <p className="text-sm text-gray-400">
-                <strong>Note:</strong> This is a demo payment system. In production, this would integrate 
-                with Pay.ir or Zarinpal for secure payment processing.
+                <strong>توجه:</strong> {t.payment.demoNote}
               </p>
             </div>
           </CardContent>

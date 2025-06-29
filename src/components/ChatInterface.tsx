@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Image, Menu, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -11,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
+import { t } from '@/lib/localization';
 
 interface Message {
   id: string;
@@ -32,7 +34,7 @@ const ChatInterface = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      content: "Hello! I'm your AI assistant. I can chat with you and generate images using DALL·E 3. How can I help you today?",
+      content: t.chat.hello,
       role: 'assistant',
       timestamp: new Date()
     }
@@ -50,7 +52,7 @@ const ChatInterface = () => {
   const navigate = useNavigate();
 
   // Image generation keywords for automatic detection
-  const imageKeywords = ['generate an image of', 'create an image', 'draw', 'illustrate', 'make a picture', 'generate image'];
+  const imageKeywords = ['generate an image of', 'create an image', 'draw', 'illustrate', 'make a picture', 'generate image', 'تصویر بساز', 'عکس بگیر', 'نقاشی کن', 'تصویر تولید کن'];
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -120,7 +122,7 @@ const ChatInterface = () => {
     if (messages.length <= 1) return;
 
     const sessionTitle = generateSessionTitle(
-      messages.find(m => m.role === 'user')?.content || 'New Chat'
+      messages.find(m => m.role === 'user')?.content || 'گفتگوی جدید'
     );
 
     const newSession: ChatSession = {
@@ -152,7 +154,7 @@ const ChatInterface = () => {
     setMessages([
       {
         id: '1',
-        content: "Hello! I'm your AI assistant. I can chat with you and generate images using DALL·E 3. How can I help you today?",
+        content: t.chat.hello,
         role: 'assistant',
         timestamp: new Date()
       }
@@ -197,7 +199,7 @@ const ChatInterface = () => {
         
         const assistantMessage: Message = {
           id: (Date.now() + 1).toString(),
-          content: `I've generated an image based on your prompt: "${input.trim()}"`,
+          content: `${t.chat.imageGenerated} "${input.trim()}"`,
           role: 'assistant',
           timestamp: new Date(),
           imageUrl: imageUrl
@@ -228,7 +230,7 @@ const ChatInterface = () => {
 
         const assistantMessage: Message = {
           id: (Date.now() + 1).toString(),
-          content: data.choices[0]?.message?.content || 'Sorry, I could not generate a response.',
+          content: data.choices[0]?.message?.content || 'متأسفم، نتوانستم پاسخی تولید کنم.',
           role: 'assistant',
           timestamp: new Date()
         };
@@ -238,8 +240,8 @@ const ChatInterface = () => {
     } catch (error) {
       console.error('Error:', error);
       toast({
-        title: "Error",
-        description: "Failed to get response from AI. Please try again.",
+        title: t.chat.error,
+        description: t.chat.errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -267,7 +269,7 @@ const ChatInterface = () => {
         <div className="flex-shrink-0 bg-gray-800 border-b border-gray-700 p-4">
           <div className="max-w-4xl mx-auto">
             <div className="flex items-center justify-between mb-3">
-              <h1 className="text-2xl font-bold text-white">AI Chat Assistant</h1>
+              <h1 className="text-2xl font-bold text-white">{t.chat.title}</h1>
               <div className="flex items-center gap-2">
                 <Button
                   onClick={() => navigate('/account')}
@@ -291,7 +293,7 @@ const ChatInterface = () => {
             {/* Model Selector and Image Mode Toggle */}
             <div className="flex gap-4 items-center">
               <div className="flex items-center gap-2">
-                <Label htmlFor="model-select" className="text-gray-300 text-sm">Model:</Label>
+                <Label htmlFor="model-select" className="text-gray-300 text-sm">{t.chat.model}</Label>
                 <Select value={selectedModel} onValueChange={setSelectedModel}>
                   <SelectTrigger id="model-select" className="w-40 bg-gray-700 border-gray-600 text-white">
                     <SelectValue />
@@ -306,7 +308,7 @@ const ChatInterface = () => {
               <div className="flex items-center gap-2">
                 <Label htmlFor="image-mode" className="text-gray-300 text-sm flex items-center gap-1">
                   <Image className="w-4 h-4" />
-                  Image Mode:
+                  {t.chat.imageMode}
                 </Label>
                 <Switch
                   id="image-mode"
@@ -347,9 +349,10 @@ const ChatInterface = () => {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder={imageMode ? "Describe the image you want to generate..." : "Type your message..."}
+                placeholder={imageMode ? t.chat.imagePlaceholder : t.chat.typePlaceholder}
                 disabled={isLoading}
-                className="flex-1 bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500"
+                className="flex-1 bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 text-right"
+                dir="rtl"
               />
               <Button
                 type="submit"
@@ -360,8 +363,8 @@ const ChatInterface = () => {
               </Button>
             </form>
             {imageMode && (
-              <p className="text-xs text-gray-400 mt-1">
-                Image Mode is active - your message will be used to generate an image
+              <p className="text-xs text-gray-400 mt-1 text-right">
+                {t.chat.imageModeActive}
               </p>
             )}
           </div>

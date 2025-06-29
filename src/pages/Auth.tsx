@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
+import { t } from '@/lib/localization';
 
 const Auth = () => {
   const [email, setEmail] = useState('');
@@ -36,14 +37,14 @@ const Auth = () => {
     
     if (error) {
       toast({
-        title: "Sign Up Error",
+        title: t.auth.signUpError,
         description: error.message,
         variant: "destructive"
       });
     } else {
       toast({
-        title: "Success",
-        description: "Please check your email to confirm your account"
+        title: t.auth.success,
+        description: t.auth.confirmEmail
       });
     }
     
@@ -58,7 +59,7 @@ const Auth = () => {
     
     if (error) {
       toast({
-        title: "Sign In Error",
+        title: t.auth.signInError,
         description: error.message,
         variant: "destructive"
       });
@@ -75,14 +76,14 @@ const Auth = () => {
     
     if (error) {
       toast({
-        title: "Reset Error",
+        title: t.auth.resetError,
         description: error.message,
         variant: "destructive"
       });
     } else {
       toast({
-        title: "Success",
-        description: "Password reset email sent! Check your inbox."
+        title: t.auth.success,
+        description: t.auth.resetEmailSent
       });
       setShowReset(false);
       setResetEmail('');
@@ -96,12 +97,12 @@ const Auth = () => {
       <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
         <Card className="w-full max-w-md bg-gray-800 border-gray-700">
           <CardHeader>
-            <CardTitle className="text-white text-center">Reset Password</CardTitle>
+            <CardTitle className="text-white text-center">{t.auth.resetPassword}</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleResetPassword} className="space-y-4">
               <div>
-                <Label htmlFor="reset-email" className="text-gray-300">Email</Label>
+                <Label htmlFor="reset-email" className="text-gray-300">{t.auth.email}</Label>
                 <Input
                   id="reset-email"
                   type="email"
@@ -116,7 +117,7 @@ const Auth = () => {
                 className="w-full bg-blue-600 hover:bg-blue-700"
                 disabled={loading}
               >
-                {loading ? 'Sending...' : 'Send Reset Email'}
+                {loading ? t.auth.sending : t.auth.sendResetEmail}
               </Button>
               <Button 
                 type="button" 
@@ -124,7 +125,7 @@ const Auth = () => {
                 className="w-full text-gray-400 hover:text-white"
                 onClick={() => setShowReset(false)}
               >
-                Back to Login
+                {t.auth.backToLogin}
               </Button>
             </form>
           </CardContent>
@@ -137,19 +138,19 @@ const Auth = () => {
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
       <Card className="w-full max-w-md bg-gray-800 border-gray-700">
         <CardHeader>
-          <CardTitle className="text-white text-center">AI Chat Assistant</CardTitle>
+          <CardTitle className="text-white text-center">{t.auth.title}</CardTitle>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin" className="w-full">
             <TabsList className="grid w-full grid-cols-2 bg-gray-700">
-              <TabsTrigger value="signin" className="text-gray-300 data-[state=active]:text-white">Sign In</TabsTrigger>
-              <TabsTrigger value="signup" className="text-gray-300 data-[state=active]:text-white">Sign Up</TabsTrigger>
+              <TabsTrigger value="signin" className="text-gray-300 data-[state=active]:text-white">{t.auth.signIn}</TabsTrigger>
+              <TabsTrigger value="signup" className="text-gray-300 data-[state=active]:text-white">{t.auth.signUp}</TabsTrigger>
             </TabsList>
             
             <TabsContent value="signin" className="space-y-4">
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div>
-                  <Label htmlFor="signin-email" className="text-gray-300">Email</Label>
+                  <Label htmlFor="signin-email" className="text-gray-300">{t.auth.email}</Label>
                   <Input
                     id="signin-email"
                     type="email"
@@ -160,7 +161,7 @@ const Auth = () => {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="signin-password" className="text-gray-300">Password</Label>
+                  <Label htmlFor="signin-password" className="text-gray-300">{t.auth.password}</Label>
                   <Input
                     id="signin-password"
                     type="password"
@@ -175,7 +176,7 @@ const Auth = () => {
                   className="w-full bg-blue-600 hover:bg-blue-700"
                   disabled={loading}
                 >
-                  {loading ? 'Signing In...' : 'Sign In'}
+                  {loading ? t.auth.signingIn : t.auth.signIn}
                 </Button>
                 <Button 
                   type="button" 
@@ -183,7 +184,7 @@ const Auth = () => {
                   className="w-full text-gray-400 hover:text-white"
                   onClick={() => setShowReset(true)}
                 >
-                  Forgot Password?
+                  {t.auth.forgotPassword}
                 </Button>
               </form>
             </TabsContent>
@@ -191,7 +192,7 @@ const Auth = () => {
             <TabsContent value="signup" className="space-y-4">
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div>
-                  <Label htmlFor="signup-name" className="text-gray-300">Full Name</Label>
+                  <Label htmlFor="signup-name" className="text-gray-300">{t.auth.fullName}</Label>
                   <Input
                     id="signup-name"
                     type="text"
@@ -201,7 +202,7 @@ const Auth = () => {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="signup-email" className="text-gray-300">Email</Label>
+                  <Label htmlFor="signup-email" className="text-gray-300">{t.auth.email}</Label>
                   <Input
                     id="signup-email"
                     type="email"
@@ -212,7 +213,7 @@ const Auth = () => {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="signup-password" className="text-gray-300">Password</Label>
+                  <Label htmlFor="signup-password" className="text-gray-300">{t.auth.password}</Label>
                   <Input
                     id="signup-password"
                     type="password"
@@ -227,7 +228,7 @@ const Auth = () => {
                   className="w-full bg-blue-600 hover:bg-blue-700"
                   disabled={loading}
                 >
-                  {loading ? 'Creating Account...' : 'Sign Up'}
+                  {loading ? t.auth.creatingAccount : t.auth.signUp}
                 </Button>
               </form>
             </TabsContent>

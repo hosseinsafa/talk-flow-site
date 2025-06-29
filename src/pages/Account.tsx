@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { User, CreditCard, BarChart3, LogOut } from 'lucide-react';
+import { t } from '@/lib/localization';
 
 interface UserProfile {
   id: string;
@@ -86,8 +87,8 @@ const Account = () => {
     } catch (error) {
       console.error('Error fetching user data:', error);
       toast({
-        title: "Error",
-        description: "Failed to load account data",
+        title: t.account.error,
+        description: t.account.errorLoadingData,
         variant: "destructive"
       });
     } finally {
@@ -108,16 +109,16 @@ const Account = () => {
       if (error) throw error;
 
       toast({
-        title: "Success",
-        description: "Profile updated successfully"
+        title: t.common.success,
+        description: t.account.profileUpdated
       });
       
       fetchUserData();
     } catch (error) {
       console.error('Error updating profile:', error);
       toast({
-        title: "Error",
-        description: "Failed to update profile",
+        title: t.account.error,
+        description: t.account.updateError,
         variant: "destructive"
       });
     } finally {
@@ -137,7 +138,7 @@ const Account = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center">
-        <div className="text-white">Loading...</div>
+        <div className="text-white">{t.account.loading}</div>
       </div>
     );
   }
@@ -155,16 +156,16 @@ const Account = () => {
         {/* Header */}
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-white">Account Settings</h1>
-            <p className="text-gray-400">Manage your profile and subscription</p>
+            <h1 className="text-3xl font-bold text-white">{t.account.title}</h1>
+            <p className="text-gray-400">{t.account.subtitle}</p>
           </div>
           <div className="flex gap-2">
             <Button onClick={() => navigate('/')} variant="outline" className="border-gray-600 text-gray-300 hover:text-white">
-              Back to Chat
+              {t.account.backToChat}
             </Button>
             <Button onClick={handleSignOut} variant="outline" className="border-gray-600 text-gray-300 hover:text-white">
-              <LogOut className="w-4 h-4 mr-2" />
-              Sign Out
+              <LogOut className="w-4 h-4 ml-2" />
+              {t.account.signOut}
             </Button>
           </div>
         </div>
@@ -174,14 +175,14 @@ const Account = () => {
           <CardHeader>
             <CardTitle className="text-white flex items-center gap-2">
               <User className="w-5 h-5" />
-              Profile Information
+              {t.account.profileInfo}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={updateProfile} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="fullname" className="text-gray-300">Full Name</Label>
+                  <Label htmlFor="fullname" className="text-gray-300">{t.account.fullName}</Label>
                   <Input
                     id="fullname"
                     value={fullName}
@@ -190,12 +191,12 @@ const Account = () => {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="email" className="text-gray-300">Email</Label>
+                  <Label htmlFor="email" className="text-gray-300">{t.account.email}</Label>
                   <Input
                     id="email"
                     value={profile?.email || ''}
                     disabled
-                    className="bg-gray-700 border-gray-600 text-white opacity-50"
+                    className="bg-gray-700 border-gray-600 text-white opacity-50 ltr"
                   />
                 </div>
               </div>
@@ -204,7 +205,7 @@ const Account = () => {
                 className="bg-blue-600 hover:bg-blue-700"
                 disabled={updating}
               >
-                {updating ? 'Updating...' : 'Update Profile'}
+                {updating ? t.account.updating : t.account.updateProfile}
               </Button>
             </form>
           </CardContent>
@@ -215,7 +216,7 @@ const Account = () => {
           <CardHeader>
             <CardTitle className="text-white flex items-center gap-2">
               <CreditCard className="w-5 h-5" />
-              Subscription Plan
+              {t.account.subscriptionPlan}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -223,24 +224,24 @@ const Account = () => {
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <Badge variant={plan?.plan_type === 'pro' ? 'default' : 'secondary'} className="capitalize">
-                    {plan?.plan_type} Plan
+                    {plan?.plan_type === 'pro' ? t.account.proPlan : t.account.freePlan}
                   </Badge>
                   <Badge variant={plan?.status === 'active' ? 'default' : 'destructive'} className="capitalize">
-                    {plan?.status}
+                    {plan?.status === 'active' ? t.account.active : t.account.inactive}
                   </Badge>
                 </div>
                 <p className="text-gray-400">
-                  {plan?.plan_type === 'pro' ? 'Premium features unlocked' : 'Limited features available'}
+                  {plan?.plan_type === 'pro' ? t.account.premiumUnlocked : t.account.limitedFeatures}
                 </p>
                 {plan?.expires_at && (
                   <p className="text-sm text-gray-500">
-                    Expires: {new Date(plan.expires_at).toLocaleDateString()}
+                    {t.account.expires} {new Date(plan.expires_at).toLocaleDateString('fa-IR')}
                   </p>
                 )}
               </div>
               {plan?.plan_type === 'free' && (
                 <Button onClick={handleUpgrade} className="bg-green-600 hover:bg-green-700">
-                  Upgrade to Pro
+                  {t.account.upgradeToPro}
                 </Button>
               )}
             </div>
@@ -252,14 +253,14 @@ const Account = () => {
           <CardHeader>
             <CardTitle className="text-white flex items-center gap-2">
               <BarChart3 className="w-5 h-5" />
-              Usage Statistics
+              {t.account.usageStats}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-gray-300">Chat Messages</span>
+                  <span className="text-gray-300">{t.account.chatMessages}</span>
                   <span className="text-white font-medium">
                     {usage?.chat_messages_count || 0} / {currentLimits.messages}
                   </span>
@@ -276,7 +277,7 @@ const Account = () => {
               
               <div>
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-gray-300">Images Generated</span>
+                  <span className="text-gray-300">{t.account.imagesGenerated}</span>
                   <span className="text-white font-medium">
                     {usage?.images_generated_count || 0} / {currentLimits.images}
                   </span>
@@ -294,7 +295,7 @@ const Account = () => {
             
             <div className="mt-4 p-3 bg-gray-700 rounded-lg">
               <p className="text-sm text-gray-400">
-                Usage resets monthly on {new Date(usage?.last_reset_date || '').toLocaleDateString()}
+                {t.account.usageResets} {new Date(usage?.last_reset_date || '').toLocaleDateString('fa-IR')}
               </p>
             </div>
           </CardContent>
