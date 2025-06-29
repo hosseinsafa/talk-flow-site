@@ -19,7 +19,8 @@ const PhoneAuth = ({ onBack }: PhoneAuthProps) => {
     setOtpCode,
     loading,
     handleSendOtp,
-    handleVerifyOtp
+    handleVerifyOtp,
+    mockOtp
   } = usePhoneAuth();
 
   const getStepTitle = () => {
@@ -50,6 +51,7 @@ const PhoneAuth = ({ onBack }: PhoneAuthProps) => {
             onSubmit={handleVerifyOtp}
             loading={loading}
             onChangePhone={() => setStep('phone')}
+            mockOtp={mockOtp}
           />
         );
     }

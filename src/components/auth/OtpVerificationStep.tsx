@@ -10,6 +10,7 @@ interface OtpVerificationStepProps {
   onSubmit: (e: React.FormEvent) => Promise<void>;
   loading: boolean;
   onChangePhone: () => void;
+  mockOtp?: string;
 }
 
 export const OtpVerificationStep = ({
@@ -18,7 +19,8 @@ export const OtpVerificationStep = ({
   setOtpCode,
   onSubmit,
   loading,
-  onChangePhone
+  onChangePhone,
+  mockOtp
 }: OtpVerificationStepProps) => {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
@@ -26,6 +28,13 @@ export const OtpVerificationStep = ({
         <p className="text-gray-300 mb-4">
           کد تأیید به شماره {phoneNumber} ارسال شد
         </p>
+        {mockOtp && (
+          <div className="bg-yellow-800 border border-yellow-600 rounded p-3 mb-4">
+            <p className="text-yellow-200 text-sm font-bold">
+              حالت تست - کد OTP: {mockOtp}
+            </p>
+          </div>
+        )}
         <div className="flex justify-center" dir="ltr">
           <InputOTP value={otpCode} onChange={setOtpCode} maxLength={6}>
             <InputOTPGroup>

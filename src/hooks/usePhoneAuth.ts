@@ -10,6 +10,7 @@ export const usePhoneAuth = () => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const [mockOtp, setMockOtp] = useState<string>('');
   
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -44,9 +45,14 @@ export const usePhoneAuth = () => {
         });
       } else {
         console.log('OTP sent successfully:', data);
+        if (data.mock_otp) {
+          setMockOtp(data.mock_otp);
+          console.log('=== TEST OTP CODE:', data.mock_otp, '===');
+        }
         toast({
           title: 'موفق',
-          description: 'کد تأیید به شماره شما ارسال شد'
+          description: `کد تأیید: ${data.mock_otp || 'ارسال شد'} (حالت تست)`,
+          duration: 10000
         });
         setStep('otp');
       }
@@ -127,6 +133,7 @@ export const usePhoneAuth = () => {
     setOtpCode,
     loading,
     handleSendOtp,
-    handleVerifyOtp
+    handleVerifyOtp,
+    mockOtp
   };
 };

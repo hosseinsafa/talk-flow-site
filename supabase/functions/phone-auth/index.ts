@@ -22,7 +22,7 @@ serve(async (req) => {
     );
 
     if (req.method === 'POST') {
-      // Send OTP using Kavenegar Send API
+      // Send OTP - Mock implementation for testing
       if (phone_number) {
         // Verify phone number format
         const phoneRegex = /^(\+98|0098|98|0)?9[0-9]{9}$/;
@@ -33,51 +33,15 @@ serve(async (req) => {
           );
         }
 
-        // Generate OTP
-        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        // Use fixed OTP for testing
+        const otpCode = '123456';
         
-        // Get Kavenegar API key
-        const kavenegarApiKey = Deno.env.get('KAVENEGAR_API_KEY');
-        if (!kavenegarApiKey) {
-          return new Response(
-            JSON.stringify({ error: 'SMS service not configured' }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-          );
-        }
-
         const normalizedPhone = phone_number.replace(/^(\+98|0098|98|0)/, '');
         const fullPhone = normalizedPhone.startsWith('9') ? '+98' + normalizedPhone : phone_number;
-        const receptorPhone = normalizedPhone.startsWith('9') ? '0' + normalizedPhone : phone_number;
         
-        // Use Kavenegar Send API to send OTP
-        const message = `Your verification code is: ${otpCode}`;
-        const kavenegarUrl = `https://api.kavenegar.com/v1/${kavenegarApiKey}/sms/send.json`;
+        console.log('MOCK OTP SYSTEM - Phone:', fullPhone, 'OTP Code:', otpCode);
+        console.log('=== FOR TESTING: Use OTP code 123456 ===');
         
-        console.log('Sending OTP via Kavenegar Send API to:', receptorPhone, 'with code:', otpCode);
-        
-        const kavenegarResponse = await fetch(kavenegarUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: new URLSearchParams({
-            receptor: receptorPhone,
-            message: message,
-            sender: '2000660110' // Kavenegar's high-speed test line
-          })
-        });
-
-        const kavenegarResult = await kavenegarResponse.json();
-        console.log('Kavenegar response:', kavenegarResult);
-
-        if (!kavenegarResponse.ok || kavenegarResult.return?.status !== 200) {
-          console.error('Kavenegar error:', kavenegarResult);
-          return new Response(
-            JSON.stringify({ error: 'Failed to send OTP' }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-          );
-        }
-
         // Store OTP in database for verification
         const { error: dbError } = await supabaseClient
           .from('otp_verifications')
@@ -99,8 +63,9 @@ serve(async (req) => {
         return new Response(
           JSON.stringify({ 
             success: true, 
-            message: 'OTP sent successfully',
-            phone_number: fullPhone 
+            message: 'OTP sent successfully (MOCK)',
+            phone_number: fullPhone,
+            mock_otp: otpCode // Include OTP in response for testing
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
