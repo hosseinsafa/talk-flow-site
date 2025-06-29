@@ -17,42 +17,55 @@ serve(async (req) => {
     const { phone_number, otp_code } = await req.json();
     console.log('Verifying OTP for phone:', phone_number, 'with code:', otp_code);
 
+    // Normalize phone number to +98 format (same as in send-otp)
+    let normalizedPhone = phone_number.replace(/^(\+98|0098|98|0)/, '');
+    if (normalizedPhone.startsWith('9')) {
+      normalizedPhone = '+98' + normalizedPhone;
+    }
+    console.log('Normalized phone number:', normalizedPhone);
+
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Find valid OTP
-    const { data: otpRecord, error: fetchError } = await supabase
+    // Find valid OTP - use limit(1) instead of single() to handle zero results gracefully
+    const { data: otpRecords, error: fetchError } = await supabase
       .from('otp_verifications')
       .select('*')
-      .eq('phone_number', phone_number)
+      .eq('phone_number', normalizedPhone)
       .eq('otp_code', otp_code)
       .eq('verified', false)
       .gt('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+      .limit(1);
 
-    if (fetchError || !otpRecord) {
-      console.log('OTP verification failed:', fetchError);
+    if (fetchError) {
+      console.error('Database error:', fetchError);
+      return new Response(
+        JSON.stringify({ error: 'خطای داخلی سرور' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
+
+    if (!otpRecords || otpRecords.length === 0) {
+      console.log('OTP verification failed: No matching OTP found');
       
       // Get current attempts for this phone number and increment
-      const { data: existingOtp } = await supabase
+      const { data: existingOtpRecords } = await supabase
         .from('otp_verifications')
         .select('attempts')
-        .eq('phone_number', phone_number)
+        .eq('phone_number', normalizedPhone)
         .eq('verified', false)
         .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+        .limit(1);
 
-      if (existingOtp) {
-        const newAttempts = existingOtp.attempts + 1;
+      if (existingOtpRecords && existingOtpRecords.length > 0) {
+        const newAttempts = existingOtpRecords[0].attempts + 1;
         await supabase
           .from('otp_verifications')
           .update({ attempts: newAttempts })
-          .eq('phone_number', phone_number)
+          .eq('phone_number', normalizedPhone)
           .eq('verified', false);
       }
 
@@ -62,6 +75,7 @@ serve(async (req) => {
       );
     }
 
+    const otpRecord = otpRecords[0];
     console.log('OTP record found:', otpRecord);
 
     // Check attempts limit
@@ -92,14 +106,14 @@ serve(async (req) => {
     const { data: existingProfile } = await supabase
       .from('profiles')
       .select('*')
-      .eq('phone_number', phone_number)
-      .single();
+      .eq('phone_number', normalizedPhone)
+      .limit(1);
 
     console.log('Existing profile check:', existingProfile);
 
-    if (existingProfile) {
+    if (existingProfile && existingProfile.length > 0) {
       // User exists - create a temporary user and sign them in
-      const tempEmail = `${phone_number.replace(/\+/g, '').replace(/^0/, '98')}@temp.local`;
+      const tempEmail = `${normalizedPhone.replace(/\+/g, '').replace(/^0/, '98')}@temp.local`;
       
       console.log('Creating temp user with email:', tempEmail);
 
@@ -107,11 +121,11 @@ serve(async (req) => {
       const { data: authUser, error: signUpError } = await supabase.auth.admin.createUser({
         email: tempEmail,
         password: Math.random().toString(36).substring(2, 15),
-        phone: phone_number,
+        phone: normalizedPhone,
         email_confirm: true,
         phone_confirm: true,
         user_metadata: {
-          phone_number: phone_number,
+          phone_number: normalizedPhone,
           phone_verified: true
         }
       });
@@ -125,11 +139,11 @@ serve(async (req) => {
       }
 
       // Update the existing profile with the auth user ID if needed
-      if (authUser?.user && existingProfile.id !== authUser.user.id) {
+      if (authUser?.user && existingProfile[0].id !== authUser.user.id) {
         await supabase
           .from('profiles')
           .update({ id: authUser.user.id })
-          .eq('phone_number', phone_number);
+          .eq('phone_number', normalizedPhone);
       }
 
       // Generate access token for the user
@@ -162,7 +176,7 @@ serve(async (req) => {
           success: true, 
           message: 'تأیید موفقیت‌آمیز - لطفاً اطلاعات خود را تکمیل کنید',
           user_exists: false,
-          phone_number: phone_number
+          phone_number: normalizedPhone
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
