@@ -27,7 +27,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <div className="min-h-screen bg-gray-900">
+          <div className="min-h-screen bg-black">
             <Navigation />
             <main className="pt-16">
               <Routes>
