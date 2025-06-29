@@ -15,6 +15,7 @@ serve(async (req) => {
 
   try {
     const { phone_number, otp_code } = await req.json();
+    console.log('Verifying OTP for phone:', phone_number, 'with code:', otp_code);
 
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -29,28 +30,27 @@ serve(async (req) => {
       .eq('otp_code', otp_code)
       .eq('verified', false)
       .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1)
       .single();
 
     if (fetchError || !otpRecord) {
-      // Try to increment attempts - if it fails, use regular update
-      try {
-        await supabase.rpc('increment_otp_attempts', { 
-          input_phone_number: phone_number 
-        });
-      } catch (rpcError) {
-        // If RPC doesn't exist, use regular update
-        await supabase
-          .from('otp_verifications')
-          .update({ attempts: (otpRecord?.attempts || 0) + 1 })
-          .eq('phone_number', phone_number)
-          .eq('verified', false);
-      }
+      console.log('OTP verification failed:', fetchError);
+      
+      // Increment attempts for invalid OTP
+      await supabase
+        .from('otp_verifications')
+        .update({ attempts: supabase.raw('attempts + 1') })
+        .eq('phone_number', phone_number)
+        .eq('verified', false);
 
       return new Response(
         JSON.stringify({ error: 'کد تأیید نامعتبر یا منقضی است' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
+
+    console.log('OTP record found:', otpRecord);
 
     // Check attempts limit
     if (otpRecord.attempts >= 5) {
@@ -74,6 +74,8 @@ serve(async (req) => {
       );
     }
 
+    console.log('OTP marked as verified');
+
     // Check if user already exists with this phone number
     const { data: existingProfile } = await supabase
       .from('profiles')
@@ -81,11 +83,45 @@ serve(async (req) => {
       .eq('phone_number', phone_number)
       .single();
 
+    console.log('Existing profile check:', existingProfile);
+
     if (existingProfile) {
-      // User exists, create session for existing user
-      const tempEmail = existingProfile.email || `${phone_number.replace('+', '')}@temp.local`;
+      // User exists - create a temporary user and sign them in
+      const tempEmail = `${phone_number.replace(/\+/g, '').replace(/^0/, '98')}@temp.local`;
       
-      const { data: authData, error: signInError } = await supabase.auth.admin.generateLink({
+      console.log('Creating temp user with email:', tempEmail);
+
+      // Try to create or get existing auth user
+      const { data: authUser, error: signUpError } = await supabase.auth.admin.createUser({
+        email: tempEmail,
+        password: Math.random().toString(36).substring(2, 15),
+        phone: phone_number,
+        email_confirm: true,
+        phone_confirm: true,
+        user_metadata: {
+          phone_number: phone_number,
+          phone_verified: true
+        }
+      });
+
+      if (signUpError && !signUpError.message.includes('already registered')) {
+        console.error('Error creating auth user:', signUpError);
+        return new Response(
+          JSON.stringify({ error: 'خطا در ایجاد کاربر' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
+      }
+
+      // Update the existing profile with the auth user ID if needed
+      if (authUser?.user && existingProfile.id !== authUser.user.id) {
+        await supabase
+          .from('profiles')
+          .update({ id: authUser.user.id })
+          .eq('phone_number', phone_number);
+      }
+
+      // Generate access token for the user
+      const { data: tokenData, error: tokenError } = await supabase.auth.admin.generateLink({
         type: 'magiclink',
         email: tempEmail,
         options: {
@@ -93,12 +129,8 @@ serve(async (req) => {
         }
       });
 
-      if (signInError) {
-        console.error('Sign in error:', signInError);
-        return new Response(
-          JSON.stringify({ error: 'خطا در ورود به سیستم' }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-        );
+      if (tokenError) {
+        console.error('Token generation error:', tokenError);
       }
 
       return new Response(
@@ -106,12 +138,13 @@ serve(async (req) => {
           success: true, 
           message: 'ورود موفقیت‌آمیز',
           user_exists: true,
-          auth_url: authData.properties?.action_link
+          auth_url: tokenData?.properties?.action_link
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     } else {
-      // New user, need to create account
+      // New user - need to complete profile
+      console.log('New user - profile completion needed');
       return new Response(
         JSON.stringify({ 
           success: true, 
