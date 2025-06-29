@@ -101,15 +101,34 @@ export const usePhoneAuth = () => {
       } else {
         console.log('OTP verified successfully:', data);
         
-        if (data.auth_url) {
-          // Redirect to auth URL to establish session
-          window.location.href = data.auth_url;
+        if (data.access_token && data.refresh_token) {
+          // Set the session in Supabase
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: data.access_token,
+            refresh_token: data.refresh_token
+          });
+
+          if (sessionError) {
+            console.error('Error setting session:', sessionError);
+            toast({
+              title: 'خطا در ایجاد جلسه',
+              description: 'خطا در ایجاد جلسه کاربری',
+              variant: "destructive"
+            });
+          } else {
+            console.log('Session set successfully');
+            toast({
+              title: 'موفق',
+              description: data.user_exists ? 'ورود موفقیت‌آمیز' : 'ثبت‌نام و ورود موفقیت‌آمیز'
+            });
+            navigate('/');
+          }
         } else {
           toast({
-            title: 'موفق',
-            description: data.user_exists ? 'ورود موفقیت‌آمیز' : 'ثبت‌نام و ورود موفقیت‌آمیز'
+            title: 'خطا',
+            description: 'دریافت اطلاعات جلسه ناموفق',
+            variant: "destructive"
           });
-          navigate('/');
         }
       }
     } catch (err) {

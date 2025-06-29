@@ -23,7 +23,7 @@ serve(async (req) => {
 
     if (req.method === 'POST') {
       // Send OTP - Mock implementation for testing
-      if (phone_number) {
+      if (phone_number && !otp_code) {
         // Verify phone number format
         const phoneRegex = /^(\+98|0098|98|0)?9[0-9]{9}$/;
         if (!phoneRegex.test(phone_number)) {
@@ -70,139 +70,140 @@ serve(async (req) => {
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-    } else if (req.method === 'PATCH') {
+
       // Verify OTP and create session
-      const { phone_number: phoneNum, otp_code } = await req.json();
-      
-      const normalizedPhone = phoneNum.replace(/^(\+98|0098|98|0)/, '');
-      const fullPhone = normalizedPhone.startsWith('9') ? '+98' + normalizedPhone : phoneNum;
+      if (phone_number && otp_code) {
+        const normalizedPhone = phone_number.replace(/^(\+98|0098|98|0)/, '');
+        const fullPhone = normalizedPhone.startsWith('9') ? '+98' + normalizedPhone : phone_number;
 
-      // Get stored OTP from database
-      const { data: otpRecords, error: fetchError } = await supabaseClient
-        .from('otp_verifications')
-        .select('*')
-        .eq('phone_number', fullPhone)
-        .eq('verified', false)
-        .gt('expires_at', new Date().toISOString())
-        .order('created_at', { ascending: false })
-        .limit(1);
+        // Get stored OTP from database
+        const { data: otpRecords, error: fetchError } = await supabaseClient
+          .from('otp_verifications')
+          .select('*')
+          .eq('phone_number', fullPhone)
+          .eq('verified', false)
+          .gt('expires_at', new Date().toISOString())
+          .order('created_at', { ascending: false })
+          .limit(1);
 
-      if (fetchError || !otpRecords || otpRecords.length === 0) {
-        return new Response(
-          JSON.stringify({ error: 'No valid OTP found for this phone number' }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-        );
-      }
+        if (fetchError || !otpRecords || otpRecords.length === 0) {
+          return new Response(
+            JSON.stringify({ error: 'No valid OTP found for this phone number' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+          );
+        }
 
-      const otpRecord = otpRecords[0];
+        const otpRecord = otpRecords[0];
 
-      if (otpRecord.attempts >= 5) {
-        return new Response(
-          JSON.stringify({ error: 'Too many attempts' }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 429 }
-        );
-      }
+        if (otpRecord.attempts >= 5) {
+          return new Response(
+            JSON.stringify({ error: 'Too many attempts' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 429 }
+          );
+        }
 
-      // Verify that the provided OTP matches the stored one
-      if (otpRecord.otp_code !== otp_code) {
-        // Increment attempts
+        // Verify that the provided OTP matches the stored one
+        if (otpRecord.otp_code !== otp_code) {
+          // Increment attempts
+          await supabaseClient
+            .from('otp_verifications')
+            .update({ attempts: otpRecord.attempts + 1 })
+            .eq('id', otpRecord.id);
+
+          return new Response(
+            JSON.stringify({ error: 'Invalid OTP code' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+          );
+        }
+
+        // Mark OTP as verified
         await supabaseClient
           .from('otp_verifications')
-          .update({ attempts: otpRecord.attempts + 1 })
+          .update({ verified: true })
           .eq('id', otpRecord.id);
 
-        return new Response(
-          JSON.stringify({ error: 'Invalid OTP code' }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-        );
-      }
+        // Check if user exists in profiles table
+        let { data: existingProfile } = await supabaseClient
+          .from('profiles')
+          .select('*')
+          .eq('phone_number', fullPhone)
+          .single();
 
-      // Mark OTP as verified
-      await supabaseClient
-        .from('otp_verifications')
-        .update({ verified: true })
-        .eq('id', otpRecord.id);
+        let userId;
 
-      // Check if user exists in profiles table
-      const { data: existingProfile } = await supabaseClient
-        .from('profiles')
-        .select('*')
-        .eq('phone_number', fullPhone)
-        .single();
+        if (existingProfile) {
+          // User exists - use existing user ID
+          userId = existingProfile.id;
+          console.log('Existing user found:', userId);
+        } else {
+          // New user - create auth user and profile
+          const tempEmail = `${fullPhone.replace(/\+/g, '').replace(/^0/, '98')}@tempuser.app`;
+          
+          const { data: authUser, error: createError } = await supabaseClient.auth.admin.createUser({
+            email: tempEmail,
+            password: Math.random().toString(36).substring(2, 15),
+            phone: fullPhone,
+            email_confirm: true,
+            phone_confirm: true,
+            user_metadata: {
+              phone_number: fullPhone,
+              phone_verified: true
+            }
+          });
 
-      let userId;
+          if (createError) {
+            console.error('Error creating user:', createError);
+            return new Response(
+              JSON.stringify({ error: 'Failed to create user' }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+            );
+          }
 
-      if (existingProfile) {
-        // User exists - use existing user ID
-        userId = existingProfile.id;
-        console.log('Existing user found:', userId);
-      } else {
-        // New user - create auth user and profile
-        const tempEmail = `${fullPhone.replace(/\+/g, '').replace(/^0/, '98')}@tempuser.app`;
-        
-        const { data: authUser, error: createError } = await supabaseClient.auth.admin.createUser({
-          email: tempEmail,
-          password: Math.random().toString(36).substring(2, 15),
-          phone: fullPhone,
-          email_confirm: true,
-          phone_confirm: true,
-          user_metadata: {
-            phone_number: fullPhone,
-            phone_verified: true
+          userId = authUser.user.id;
+
+          // Create profile
+          await supabaseClient
+            .from('profiles')
+            .insert({
+              id: userId,
+              phone_number: fullPhone,
+              full_name: '',
+              email: tempEmail
+            });
+
+          console.log('New user created:', userId);
+        }
+
+        // Create a session for the user
+        const { data: sessionData, error: sessionError } = await supabaseClient.auth.admin.createSession({
+          user_id: userId,
+          session: {
+            expires_at: Math.floor(Date.now() / 1000) + (60 * 60 * 24 * 30) // 30 days
           }
         });
 
-        if (createError) {
-          console.error('Error creating user:', createError);
+        if (sessionError) {
+          console.error('Error creating session:', sessionError);
           return new Response(
-            JSON.stringify({ error: 'Failed to create user' }),
+            JSON.stringify({ error: 'Failed to create session' }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
           );
         }
 
-        userId = authUser.user.id;
+        console.log('Session created successfully for user:', userId);
 
-        // Create profile
-        await supabaseClient
-          .from('profiles')
-          .insert({
-            id: userId,
-            phone_number: fullPhone,
-            full_name: '',
-            email: tempEmail
-          });
-
-        console.log('New user created:', userId);
-      }
-
-      // Create a session token for the user
-      const { data: sessionData, error: sessionError } = await supabaseClient.auth.admin.generateLink({
-        type: 'magiclink',
-        email: existingProfile?.email || `${fullPhone.replace(/\+/g, '').replace(/^0/, '98')}@tempuser.app`,
-        options: {
-          redirectTo: `${req.headers.get('origin') || 'http://localhost:3000'}/`
-        }
-      });
-
-      if (sessionError) {
-        console.error('Error creating session:', sessionError);
         return new Response(
-          JSON.stringify({ error: 'Failed to create session' }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+          JSON.stringify({ 
+            success: true, 
+            message: existingProfile ? 'Login successful' : 'Registration and login successful',
+            user_exists: !!existingProfile,
+            access_token: sessionData.access_token,
+            refresh_token: sessionData.refresh_token,
+            user: sessionData.user
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-
-      console.log('Session created successfully for user:', userId);
-
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          message: existingProfile ? 'Login successful' : 'Registration and login successful',
-          user_exists: !!existingProfile,
-          auth_url: sessionData?.properties?.action_link
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
     }
 
     return new Response(
