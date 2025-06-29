@@ -14,16 +14,15 @@ serve(async (req) => {
   }
 
   try {
-    const { phone_number } = await req.json();
+    const { phone_number, otp_code } = await req.json();
     
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    const roles = ['user'];
-    
     if (req.method === 'POST') {
+      // Send OTP using Kavenegar VerifyLookup
       if (phone_number) {
         // Verify phone number format
         const phoneRegex = /^(\+98|0098|98|0)?9[0-9]{9}$/;
@@ -37,7 +36,7 @@ serve(async (req) => {
         // Generate OTP
         const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
         
-        // Send OTP via Kavenegar
+        // Get Kavenegar API key
         const kavenegarApiKey = Deno.env.get('KAVENEGAR_API_KEY');
         if (!kavenegarApiKey) {
           return new Response(
@@ -48,32 +47,29 @@ serve(async (req) => {
 
         const normalizedPhone = phone_number.replace(/^(\+98|0098|98|0)/, '');
         const fullPhone = normalizedPhone.startsWith('9') ? '+98' + normalizedPhone : phone_number;
+        const receptorPhone = normalizedPhone.startsWith('9') ? '0' + normalizedPhone : phone_number;
         
-        const kavenegarUrl = `https://api.kavenegar.com/v1/${kavenegarApiKey}/sms/send.json`;
-        const message = `کد تأیید شما: ${otpCode}`;
+        // Use Kavenegar VerifyLookup API to send OTP
+        const kavenegarUrl = `https://api.kavenegar.com/v1/${kavenegarApiKey}/verify/lookup.json?receptor=${receptorPhone}&token=${otpCode}&template=registerverify`;
         
-        const formData = new URLSearchParams({
-          receptor: normalizedPhone.startsWith('9') ? '0' + normalizedPhone : phone_number,
-          message: message,
-          sender: '2000660110'
-        });
-
+        console.log('Sending OTP via Kavenegar VerifyLookup to:', receptorPhone, 'with code:', otpCode);
+        
         const kavenegarResponse = await fetch(kavenegarUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: formData,
+          method: 'GET',
         });
 
-        if (!kavenegarResponse.ok) {
+        const kavenegarResult = await kavenegarResponse.json();
+        console.log('Kavenegar response:', kavenegarResult);
+
+        if (!kavenegarResponse.ok || kavenegarResult.return?.status !== 200) {
+          console.error('Kavenegar error:', kavenegarResult);
           return new Response(
             JSON.stringify({ error: 'Failed to send OTP' }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
           );
         }
 
-        // Store OTP in database
+        // Store OTP in database for verification
         const { error: dbError } = await supabaseClient
           .from('otp_verifications')
           .insert({
@@ -101,18 +97,18 @@ serve(async (req) => {
         );
       }
     } else if (req.method === 'PATCH') {
-      // Verify OTP
+      // Verify OTP using Kavenegar VerifyLookup
       const { phone_number: phoneNum, otp_code } = await req.json();
       
       const normalizedPhone = phoneNum.replace(/^(\+98|0098|98|0)/, '');
       const fullPhone = normalizedPhone.startsWith('9') ? '+98' + normalizedPhone : phoneNum;
+      const receptorPhone = normalizedPhone.startsWith('9') ? '0' + normalizedPhone : phoneNum;
 
-      // Find valid OTP
+      // Get stored OTP from database
       const { data: otpRecords, error: fetchError } = await supabaseClient
         .from('otp_verifications')
         .select('*')
         .eq('phone_number', fullPhone)
-        .eq('otp_code', otp_code)
         .eq('verified', false)
         .gt('expires_at', new Date().toISOString())
         .order('created_at', { ascending: false })
@@ -120,7 +116,7 @@ serve(async (req) => {
 
       if (fetchError || !otpRecords || otpRecords.length === 0) {
         return new Response(
-          JSON.stringify({ error: 'Invalid OTP' }),
+          JSON.stringify({ error: 'No valid OTP found for this phone number' }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
         );
       }
@@ -131,6 +127,56 @@ serve(async (req) => {
         return new Response(
           JSON.stringify({ error: 'Too many attempts' }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 429 }
+        );
+      }
+
+      // Verify that the provided OTP matches the stored one
+      if (otpRecord.otp_code !== otp_code) {
+        // Increment attempts
+        await supabaseClient
+          .from('otp_verifications')
+          .update({ attempts: otpRecord.attempts + 1 })
+          .eq('id', otpRecord.id);
+
+        return new Response(
+          JSON.stringify({ error: 'Invalid OTP code' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        );
+      }
+
+      // Get Kavenegar API key for verification
+      const kavenegarApiKey = Deno.env.get('KAVENEGAR_API_KEY');
+      if (!kavenegarApiKey) {
+        return new Response(
+          JSON.stringify({ error: 'SMS service not configured' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
+      }
+
+      // Verify OTP with Kavenegar using the same VerifyLookup endpoint
+      const kavenegarVerifyUrl = `https://api.kavenegar.com/v1/${kavenegarApiKey}/verify/lookup.json?receptor=${receptorPhone}&token=${otp_code}&template=registerverify`;
+      
+      console.log('Verifying OTP with Kavenegar for:', receptorPhone, 'with code:', otp_code);
+      
+      const kavenegarVerifyResponse = await fetch(kavenegarVerifyUrl, {
+        method: 'GET',
+      });
+
+      const kavenegarVerifyResult = await kavenegarVerifyResponse.json();
+      console.log('Kavenegar verification response:', kavenegarVerifyResult);
+
+      if (!kavenegarVerifyResponse.ok || kavenegarVerifyResult.return?.status !== 200) {
+        console.error('Kavenegar verification failed:', kavenegarVerifyResult);
+        
+        // Increment attempts
+        await supabaseClient
+          .from('otp_verifications')
+          .update({ attempts: otpRecord.attempts + 1 })
+          .eq('id', otpRecord.id);
+
+        return new Response(
+          JSON.stringify({ error: 'OTP verification failed' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
         );
       }
 
