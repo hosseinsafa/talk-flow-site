@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useKavenegarAuth } from '@/hooks/useKavenegarAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,13 +10,20 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
-import { User, CreditCard, BarChart3, LogOut } from 'lucide-react';
+import { User, CreditCard, BarChart3, LogOut, Phone, Mail } from 'lucide-react';
 import { t } from '@/lib/localization';
 
 interface UserProfile {
   id: string;
   full_name: string | null;
   email: string | null;
+  phone_number?: string | null;
+}
+
+interface PhoneUser {
+  id: string;
+  phone_number: string;
+  full_name: string | null;
 }
 
 interface UserPlan {
@@ -32,58 +40,90 @@ interface UserUsage {
 
 const Account = () => {
   const { user, signOut } = useAuth();
+  const { user: phoneUser, logout: phoneLogout, isAuthenticated: isPhoneAuth } = useKavenegarAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [phoneUserData, setPhoneUserData] = useState<PhoneUser | null>(null);
   const [plan, setPlan] = useState<UserPlan | null>(null);
   const [usage, setUsage] = useState<UserUsage | null>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [fullName, setFullName] = useState('');
 
+  const currentUser = phoneUser || user;
+  const isPhoneUser = isPhoneAuth();
+
   useEffect(() => {
-    if (!user) {
+    if (!currentUser) {
       navigate('/auth');
       return;
     }
     
     fetchUserData();
-  }, [user, navigate]);
+  }, [currentUser, navigate, isPhoneUser]);
 
   const fetchUserData = async () => {
     try {
-      // Fetch profile
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user?.id)
-        .single();
+      if (isPhoneUser && phoneUser) {
+        // Fetch phone user data
+        const { data: phoneUserData, error: phoneUserError } = await supabase
+          .from('phone_users')
+          .select('*')
+          .eq('id', phoneUser.id)
+          .single();
 
-      if (profileError) throw profileError;
-      setProfile(profileData);
-      setFullName(profileData.full_name || '');
+        if (phoneUserError) throw phoneUserError;
+        
+        setPhoneUserData(phoneUserData);
+        setFullName(phoneUserData.full_name || '');
 
-      // Fetch plan
-      const { data: planData, error: planError } = await supabase
-        .from('user_plans')
-        .select('*')
-        .eq('user_id', user?.id)
-        .single();
+        // For phone users, we'll create mock plan and usage data
+        // In a real app, you'd want to link these tables to phone_users as well
+        setPlan({
+          plan_type: 'free',
+          status: 'active',
+          expires_at: null
+        });
+        
+        setUsage({
+          chat_messages_count: 0,
+          images_generated_count: 0,
+          last_reset_date: new Date().toISOString()
+        });
+      } else if (user) {
+        // Fetch Supabase Auth user profile
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
 
-      if (planError) throw planError;
-      setPlan(planData);
+        if (profileError) throw profileError;
+        setProfile(profileData);
+        setFullName(profileData.full_name || '');
 
-      // Fetch usage
-      const { data: usageData, error: usageError } = await supabase
-        .from('user_usage')
-        .select('*')
-        .eq('user_id', user?.id)
-        .single();
+        // Fetch plan
+        const { data: planData, error: planError } = await supabase
+          .from('user_plans')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
 
-      if (usageError) throw usageError;
-      setUsage(usageData);
+        if (planError) throw planError;
+        setPlan(planData);
 
+        // Fetch usage
+        const { data: usageData, error: usageError } = await supabase
+          .from('user_usage')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+
+        if (usageError) throw usageError;
+        setUsage(usageData);
+      }
     } catch (error) {
       console.error('Error fetching user data:', error);
       toast({
@@ -101,12 +141,23 @@ const Account = () => {
     setUpdating(true);
 
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ full_name: fullName })
-        .eq('id', user?.id);
+      if (isPhoneUser && phoneUser) {
+        // Update phone user
+        const { error } = await supabase
+          .from('phone_users')
+          .update({ full_name: fullName || null })
+          .eq('id', phoneUser.id);
 
-      if (error) throw error;
+        if (error) throw error;
+      } else if (user) {
+        // Update Supabase Auth user profile
+        const { error } = await supabase
+          .from('profiles')
+          .update({ full_name: fullName || null })
+          .eq('id', user.id);
+
+        if (error) throw error;
+      }
 
       toast({
         title: t.common.success,
@@ -127,7 +178,11 @@ const Account = () => {
   };
 
   const handleSignOut = async () => {
-    await signOut();
+    if (isPhoneUser) {
+      phoneLogout();
+    } else {
+      await signOut();
+    }
     navigate('/auth');
   };
 
@@ -149,6 +204,8 @@ const Account = () => {
   };
 
   const currentLimits = planLimits[plan?.plan_type as keyof typeof planLimits] || planLimits.free;
+  const displayEmail = profile?.email;
+  const displayPhone = phoneUserData?.phone_number || profile?.phone_number;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 p-4">
@@ -182,23 +239,48 @@ const Account = () => {
             <form onSubmit={updateProfile} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="fullname" className="text-gray-300">{t.account.fullName}</Label>
+                  <Label htmlFor="fullname" className="text-gray-300">{t.account.fullName} (اختیاری)</Label>
                   <Input
                     id="fullname"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
+                    placeholder="نام و نام خانوادگی"
                     className="bg-gray-700 border-gray-600 text-white"
                   />
                 </div>
-                <div>
-                  <Label htmlFor="email" className="text-gray-300">{t.account.email}</Label>
-                  <Input
-                    id="email"
-                    value={profile?.email || ''}
-                    disabled
-                    className="bg-gray-700 border-gray-600 text-white opacity-50 ltr"
-                  />
-                </div>
+                
+                {/* Display phone number for phone users */}
+                {displayPhone && (
+                  <div>
+                    <Label htmlFor="phone" className="text-gray-300 flex items-center gap-2">
+                      <Phone className="w-4 h-4" />
+                      شماره موبایل
+                    </Label>
+                    <Input
+                      id="phone"
+                      value={displayPhone}
+                      disabled
+                      className="bg-gray-700 border-gray-600 text-white opacity-50"
+                      dir="ltr"
+                    />
+                  </div>
+                )}
+                
+                {/* Display email for email users */}
+                {displayEmail && (
+                  <div>
+                    <Label htmlFor="email" className="text-gray-300 flex items-center gap-2">
+                      <Mail className="w-4 h-4" />
+                      {t.account.email}
+                    </Label>
+                    <Input
+                      id="email"
+                      value={displayEmail}
+                      disabled
+                      className="bg-gray-700 border-gray-600 text-white opacity-50 ltr"
+                    />
+                  </div>
+                )}
               </div>
               <Button 
                 type="submit" 
