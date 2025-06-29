@@ -10,8 +10,6 @@ interface AuthContextType {
   signUp: (email: string, password: string, fullName?: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signInWithGoogle: () => Promise<{ error: any }>;
-  sendPhoneOtp: (phoneNumber: string) => Promise<{ error: any }>;
-  verifyPhoneOtp: (phoneNumber: string, otpCode: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: any }>;
 }
@@ -27,6 +25,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        console.log('Auth state changed:', event, session?.user?.id);
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
@@ -35,6 +34,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     // Check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('Initial session check:', session?.user?.id);
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
@@ -77,40 +77,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return { error };
   };
 
-  const sendPhoneOtp = async (phoneNumber: string) => {
-    console.log('Sending OTP to phone:', phoneNumber);
-    
-    const { error } = await supabase.auth.signInWithOtp({
-      phone: phoneNumber
-    });
-    
-    if (error) {
-      console.error('Error sending OTP:', error);
-      return { error };
-    }
-    
-    console.log('OTP sent successfully');
-    return { error: null };
-  };
-
-  const verifyPhoneOtp = async (phoneNumber: string, otpCode: string) => {
-    console.log('Verifying OTP for phone:', phoneNumber, 'with code:', otpCode);
-    
-    const { data, error } = await supabase.auth.verifyOtp({
-      type: 'sms',
-      phone: phoneNumber,
-      token: otpCode
-    });
-    
-    if (error) {
-      console.error('Error verifying OTP:', error);
-      return { error };
-    }
-    
-    console.log('OTP verified successfully:', data);
-    return { error: null };
-  };
-
   const signOut = async () => {
     await supabase.auth.signOut();
   };
@@ -131,8 +97,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       signUp,
       signIn,
       signInWithGoogle,
-      sendPhoneOtp,
-      verifyPhoneOtp,
       signOut,
       resetPassword
     }}>

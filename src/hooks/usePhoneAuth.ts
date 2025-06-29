@@ -4,6 +4,7 @@ import { useAuth } from './useAuth';
 import { useToast } from './use-toast';
 import { validateIranianPhone } from '@/utils/phoneValidation';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 
 export const usePhoneAuth = () => {
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
@@ -11,7 +12,6 @@ export const usePhoneAuth = () => {
   const [otpCode, setOtpCode] = useState('');
   const [loading, setLoading] = useState(false);
   
-  const { sendPhoneOtp, verifyPhoneOtp } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -29,23 +29,35 @@ export const usePhoneAuth = () => {
       return;
     }
 
-    // Convert Iranian phone format to international format
-    const internationalPhone = phoneNumber.replace(/^0/, '+98');
+    try {
+      console.log('Sending OTP via Kavenegar for phone:', phoneNumber);
+      
+      const { data, error } = await supabase.functions.invoke('send-otp', {
+        body: { phone_number: phoneNumber }
+      });
 
-    const { error } = await sendPhoneOtp(internationalPhone);
-    
-    if (error) {
+      if (error) {
+        console.error('Error sending OTP:', error);
+        toast({
+          title: 'خطا در ارسال کد',
+          description: error.message || 'خطا در ارسال کد تأیید',
+          variant: "destructive"
+        });
+      } else {
+        console.log('OTP sent successfully:', data);
+        toast({
+          title: 'موفق',
+          description: 'کد تأیید به شماره شما ارسال شد'
+        });
+        setStep('otp');
+      }
+    } catch (err) {
+      console.error('Network error:', err);
       toast({
         title: 'خطا در ارسال کد',
-        description: error.message,
+        description: 'خطا در برقراری ارتباط با سرور',
         variant: "destructive"
       });
-    } else {
-      toast({
-        title: 'موفق',
-        description: 'کد تأیید به شماره شما ارسال شد'
-      });
-      setStep('otp');
     }
     
     setLoading(false);
@@ -64,27 +76,55 @@ export const usePhoneAuth = () => {
 
     setLoading(true);
 
-    // Convert Iranian phone format to international format
-    const internationalPhone = phoneNumber.replace(/^0/, '+98');
+    try {
+      console.log('Verifying OTP via edge function for phone:', phoneNumber, 'with code:', otpCode);
+      
+      const { data, error } = await supabase.functions.invoke('verify-otp', {
+        body: { 
+          phone_number: phoneNumber,
+          otp_code: otpCode
+        }
+      });
 
-    const { error } = await verifyPhoneOtp(internationalPhone, otpCode);
-    
-    if (error) {
+      if (error) {
+        console.error('Error verifying OTP:', error);
+        toast({
+          title: 'خطا در تأیید کد',
+          description: error.message || 'کد تأیید نامعتبر است',
+          variant: "destructive"
+        });
+      } else {
+        console.log('OTP verified successfully:', data);
+        
+        if (data.user_exists) {
+          // User exists, they should be logged in via the auth_url
+          if (data.auth_url) {
+            window.location.href = data.auth_url;
+          } else {
+            toast({
+              title: 'موفق',
+              description: 'ورود موفقیت‌آمیز'
+            });
+            navigate('/');
+          }
+        } else {
+          // New user, need to complete profile
+          toast({
+            title: 'موفق',
+            description: 'تأیید موفقیت‌آمیز - لطفاً اطلاعات خود را تکمیل کنید'
+          });
+          // For now, just redirect to main page
+          // In the future, you might want to add a profile completion step
+          navigate('/');
+        }
+      }
+    } catch (err) {
+      console.error('Network error:', err);
       toast({
         title: 'خطا در تأیید کد',
-        description: error.message,
+        description: 'خطا در برقراری ارتباط با سرور',
         variant: "destructive"
       });
-    } else {
-      toast({
-        title: 'موفق',
-        description: 'ورود موفقیت‌آمیز'
-      });
-      
-      // Redirect to main page after successful authentication
-      setTimeout(() => {
-        navigate('/');
-      }, 1500);
     }
     
     setLoading(false);
