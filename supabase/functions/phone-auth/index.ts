@@ -130,55 +130,80 @@ serve(async (req) => {
           .single();
 
         let userId;
+        let userExists = !!existingProfile;
 
         if (existingProfile) {
           // User exists - use existing user ID
           userId = existingProfile.id;
           console.log('Existing user found:', userId);
         } else {
-          // New user - create auth user and profile
+          // New user - check if auth user exists first by email
           const tempEmail = `${fullPhone.replace(/\+/g, '').replace(/^0/, '98')}@tempuser.app`;
           
-          const { data: authUser, error: createError } = await supabaseClient.auth.admin.createUser({
-            email: tempEmail,
-            password: Math.random().toString(36).substring(2, 15),
-            phone: fullPhone,
-            email_confirm: true,
-            phone_confirm: true,
-            user_metadata: {
-              phone_number: fullPhone,
-              phone_verified: true
-            }
-          });
+          // Check if auth user exists
+          const { data: existingAuthUsers } = await supabaseClient.auth.admin.listUsers();
+          const existingAuthUser = existingAuthUsers.users?.find(user => 
+            user.email === tempEmail || user.phone === fullPhone
+          );
 
-          if (createError) {
-            console.error('Error creating user:', createError);
-            return new Response(
-              JSON.stringify({ error: 'Failed to create user' }),
-              { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-            );
-          }
+          if (existingAuthUser) {
+            // Auth user exists but no profile - create profile
+            userId = existingAuthUser.id;
+            
+            await supabaseClient
+              .from('profiles')
+              .insert({
+                id: userId,
+                phone_number: fullPhone,
+                full_name: '',
+                email: tempEmail
+              });
 
-          userId = authUser.user.id;
-
-          // Create profile
-          await supabaseClient
-            .from('profiles')
-            .insert({
-              id: userId,
-              phone_number: fullPhone,
-              full_name: '',
-              email: tempEmail
+            console.log('Created profile for existing auth user:', userId);
+          } else {
+            // Create new auth user and profile
+            const { data: authUser, error: createError } = await supabaseClient.auth.admin.createUser({
+              email: tempEmail,
+              password: Math.random().toString(36).substring(2, 15),
+              phone: fullPhone,
+              email_confirm: true,
+              phone_confirm: true,
+              user_metadata: {
+                phone_number: fullPhone,
+                phone_verified: true
+              }
             });
 
-          console.log('New user created:', userId);
+            if (createError) {
+              console.error('Error creating user:', createError);
+              return new Response(
+                JSON.stringify({ error: 'Failed to create user' }),
+                { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+              );
+            }
+
+            userId = authUser.user.id;
+
+            // Create profile
+            await supabaseClient
+              .from('profiles')
+              .insert({
+                id: userId,
+                phone_number: fullPhone,
+                full_name: '',
+                email: tempEmail
+              });
+
+            console.log('New user created:', userId);
+          }
         }
 
         // Create a session for the user
-        const { data: sessionData, error: sessionError } = await supabaseClient.auth.admin.createSession({
-          user_id: userId,
-          session: {
-            expires_at: Math.floor(Date.now() / 1000) + (60 * 60 * 24 * 30) // 30 days
+        const { data: sessionData, error: sessionError } = await supabaseClient.auth.admin.generateLink({
+          type: 'magiclink',
+          email: `${fullPhone.replace(/\+/g, '').replace(/^0/, '98')}@tempuser.app`,
+          options: {
+            redirectTo: `${req.headers.get('origin') || 'http://localhost:3000'}/`
           }
         });
 
@@ -190,16 +215,19 @@ serve(async (req) => {
           );
         }
 
+        // Get user data for response
+        const { data: userData } = await supabaseClient.auth.admin.getUserById(userId);
+
         console.log('Session created successfully for user:', userId);
 
         return new Response(
           JSON.stringify({ 
             success: true, 
-            message: existingProfile ? 'Login successful' : 'Registration and login successful',
-            user_exists: !!existingProfile,
-            access_token: sessionData.access_token,
-            refresh_token: sessionData.refresh_token,
-            user: sessionData.user
+            message: userExists ? 'Login successful' : 'Registration and login successful',
+            user_exists: userExists,
+            access_token: sessionData.properties?.access_token,
+            refresh_token: sessionData.properties?.refresh_token,
+            user: userData?.user
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
