@@ -15,6 +15,7 @@ serve(async (req) => {
 
   try {
     const { phone, code } = await req.json();
+    console.log('Phone auth request:', { phone, code });
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -22,6 +23,7 @@ serve(async (req) => {
     );
 
     if (!phone || !code) {
+      console.log('Missing phone or code');
       return new Response(
         JSON.stringify({ error: "Phone and code are required." }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
@@ -39,6 +41,7 @@ serve(async (req) => {
     let user = users.users?.find(u => u.phone === phone);
 
     if (!user) {
+      console.log('Creating new user for phone:', phone);
       // Create user if not exist
       const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
         phone,
@@ -58,11 +61,14 @@ serve(async (req) => {
 
     // Verify OTP code manually (mock for now, replace with Kavenegar check if needed)
     if (code !== "123456") {
+      console.log('Invalid OTP code provided:', code);
       return new Response(
         JSON.stringify({ error: "Invalid OTP code." }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
       );
     }
+
+    console.log('OTP verified, creating session for user:', user.id);
 
     // Create session after verification
     const { data: sessionData, error: sessionError } = await supabase.auth.admin.createSession({
@@ -74,14 +80,12 @@ serve(async (req) => {
       throw sessionError;
     }
 
-    console.log('Session created successfully for user:', user.id);
+    console.log('Session created successfully');
 
     return new Response(
       JSON.stringify({ 
         message: "Login successful.", 
-        session: sessionData,
-        access_token: sessionData.access_token,
-        refresh_token: sessionData.refresh_token
+        session: sessionData
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );

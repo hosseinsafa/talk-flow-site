@@ -10,7 +10,7 @@ export const usePhoneAuth = () => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [loading, setLoading] = useState(false);
-  const [mockOtp, setMockOtp] = useState<string>('');
+  const [mockOtp, setMockOtp] = useState<string>('123456');
   
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -30,34 +30,21 @@ export const usePhoneAuth = () => {
     }
 
     try {
-      console.log('Sending OTP via phone-auth function for phone:', phoneNumber);
+      console.log('Sending OTP for phone:', phoneNumber);
       
-      const { data, error } = await supabase.functions.invoke('phone-auth', {
-        body: { phone_number: phoneNumber }
+      // For now, we'll just show the mock OTP and move to verification step
+      // In a real implementation, you would call an Edge Function to send SMS
+      setMockOtp('123456');
+      console.log('=== TEST OTP CODE: 123456 ===');
+      
+      toast({
+        title: 'موفق',
+        description: 'کد تأیید: 123456 (حالت تست)',
+        duration: 10000
       });
-
-      if (error) {
-        console.error('Error sending OTP:', error);
-        toast({
-          title: 'خطا در ارسال کد',
-          description: error.message || 'خطا در ارسال کد تأیید',
-          variant: "destructive"
-        });
-      } else {
-        console.log('OTP sent successfully:', data);
-        if (data.mock_otp) {
-          setMockOtp(data.mock_otp);
-          console.log('=== TEST OTP CODE:', data.mock_otp, '===');
-        }
-        toast({
-          title: 'موفق',
-          description: `کد تأیید: ${data.mock_otp || 'ارسال شد'} (حالت تست)`,
-          duration: 10000
-        });
-        setStep('otp');
-      }
+      setStep('otp');
     } catch (err) {
-      console.error('Network error:', err);
+      console.error('Error in OTP flow:', err);
       toast({
         title: 'خطا در ارسال کد',
         description: 'خطا در برقراری ارتباط با سرور',
@@ -82,14 +69,16 @@ export const usePhoneAuth = () => {
     setLoading(true);
 
     try {
-      console.log('Verifying OTP via phone-auth function for phone:', phoneNumber, 'with code:', otpCode);
+      console.log('Verifying OTP for phone:', phoneNumber, 'with code:', otpCode);
       
       const { data, error } = await supabase.functions.invoke('phone-auth', {
         body: { 
-          phone_number: phoneNumber,
-          otp_code: otpCode
+          phone: phoneNumber,
+          code: otpCode
         }
       });
+
+      console.log('Phone auth response:', { data, error });
 
       if (error) {
         console.error('Error verifying OTP:', error);
@@ -98,38 +87,36 @@ export const usePhoneAuth = () => {
           description: error.message || 'کد تأیید نامعتبر است',
           variant: "destructive"
         });
-      } else {
-        console.log('OTP verified successfully:', data);
+      } else if (data?.session) {
+        console.log('OTP verified successfully, setting session:', data.session);
         
-        if (data.access_token && data.refresh_token) {
-          // Set the session in Supabase
-          const { error: sessionError } = await supabase.auth.setSession({
-            access_token: data.access_token,
-            refresh_token: data.refresh_token
-          });
+        // Set the session in Supabase
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token
+        });
 
-          if (sessionError) {
-            console.error('Error setting session:', sessionError);
-            toast({
-              title: 'خطا در ایجاد جلسه',
-              description: 'خطا در ایجاد جلسه کاربری',
-              variant: "destructive"
-            });
-          } else {
-            console.log('Session set successfully');
-            toast({
-              title: 'موفق',
-              description: data.user_exists ? 'ورود موفقیت‌آمیز' : 'ثبت‌نام و ورود موفقیت‌آمیز'
-            });
-            navigate('/');
-          }
-        } else {
+        if (sessionError) {
+          console.error('Error setting session:', sessionError);
           toast({
-            title: 'خطا',
-            description: 'دریافت اطلاعات جلسه ناموفق',
+            title: 'خطا در ایجاد جلسه',
+            description: 'خطا در ایجاد جلسه کاربری',
             variant: "destructive"
           });
+        } else {
+          console.log('Session set successfully');
+          toast({
+            title: 'موفق',
+            description: 'ورود موفقیت‌آمیز'
+          });
+          navigate('/');
         }
+      } else {
+        toast({
+          title: 'خطا',
+          description: 'پاسخ نامعتبر از سرور',
+          variant: "destructive"
+        });
       }
     } catch (err) {
       console.error('Network error:', err);
