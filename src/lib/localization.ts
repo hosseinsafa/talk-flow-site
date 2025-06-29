@@ -20,7 +20,20 @@ export const persianTexts = {
     resetError: "خطا در بازیابی",
     success: "موفق",
     confirmEmail: "لطفاً ایمیل خود را برای تأیید حساب بررسی کنید",
-    resetEmailSent: "ایمیل بازیابی رمز عبور ارسال شد! صندوق ورودی خود را بررسی کنید."
+    resetEmailSent: "ایمیل بازیابی رمز عبور ارسال شد! صندوق ورودی خود را بررسی کنید.",
+    googleSignIn: "ورود با گوگل",
+    phoneSignIn: "ورود با شماره موبایل",
+    orDivider: "یا",
+    phoneNumber: "شماره موبایل",
+    sendOtpCode: "ارسال کد تأیید",
+    verifyCode: "تأیید کد",
+    otpSent: "کد تأیید به شماره شما ارسال شد",
+    enterOtpCode: "کد ۶ رقمی را وارد کنید",
+    changeNumber: "تغییر شماره",
+    completeInfo: "تکمیل اطلاعات",
+    createAccount: "ایجاد حساب",
+    enterFullName: "نام کامل خود را وارد کنید",
+    emailOptional: "ایمیل (اختیاری)"
   },
 
   // Chat Interface
@@ -37,7 +50,9 @@ export const persianTexts = {
     imageGenerated: "بر اساس درخواست شما تصویری تولید کردم:",
     chatHistory: "تاریخچه گفتگو",
     newChat: "گفتگوی جدید",
-    noHistory: "هنوز تاریخچه گفتگویی وجود ندارد"
+    noHistory: "هنوز تاریخچه گفتگویی وجود ندارد",
+    send: "ارسال",
+    sending: "در حال ارسال..."
   },
 
   // Account Management
@@ -49,6 +64,7 @@ export const persianTexts = {
     profileInfo: "اطلاعات پروفایل",
     fullName: "نام کامل",
     email: "ایمیل",
+    phoneNumber: "شماره موبایل",
     updating: "در حال به‌روزرسانی...",
     updateProfile: "به‌روزرسانی پروفایل",
     subscriptionPlan: "طرح اشتراک",
@@ -122,7 +138,33 @@ export const persianTexts = {
     cancel: "لغو",
     confirm: "تأیید",
     save: "ذخیره",
-    back: "بازگشت"
+    back: "بازگشت",
+    submit: "ارسال",
+    close: "بستن",
+    yes: "بله",
+    no: "خیر",
+    retry: "تلاش مجدد"
+  },
+
+  // Phone Authentication
+  phoneAuth: {
+    title: "ورود با شماره موبایل",
+    phoneNumber: "شماره موبایل",
+    enterPhone: "شماره موبایل خود را وارد کنید",
+    sendCode: "ارسال کد تأیید",
+    verifyTitle: "تأیید کد",
+    codeSentTo: "کد تأیید به شماره {phone} ارسال شد",
+    enterCode: "کد ۶ رقمی را وارد کنید",
+    verifyCode: "تأیید کد",
+    changePhone: "تغییر شماره",
+    completeProfile: "تکمیل اطلاعات",
+    invalidPhone: "لطفاً شماره موبایل معتبر وارد کنید (09xxxxxxxxx)",
+    codeIncomplete: "لطفاً کد ۶ رقمی را کامل وارد کنید",
+    enterName: "لطفاً نام خود را وارد کنید",
+    codeSent: "کد تأیید به شماره شما ارسال شد",
+    loginSuccessful: "ورود موفقیت‌آمیز",
+    verificationSuccessful: "تأیید موفقیت‌آمیز - لطفاً اطلاعات خود را تکمیل کنید",
+    accountCreated: "حساب شما با موفقیت ایجاد شد"
   }
 };
 

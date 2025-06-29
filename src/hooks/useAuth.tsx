@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,6 +8,10 @@ interface AuthContextType {
   loading: boolean;
   signUp: (email: string, password: string, fullName?: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
+  signInWithGoogle: () => Promise<{ error: any }>;
+  sendOtp: (phoneNumber: string) => Promise<{ error: any, data?: any }>;
+  verifyOtp: (phoneNumber: string, otpCode: string) => Promise<{ error: any, data?: any }>;
+  completePhoneSignUp: (phoneNumber: string, fullName: string, email?: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: any }>;
 }
@@ -64,6 +67,91 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return { error };
   };
 
+  const signInWithGoogle = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/`
+      }
+    });
+    return { error };
+  };
+
+  const sendOtp = async (phoneNumber: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('send-otp', {
+        body: { phone_number: phoneNumber }
+      });
+      
+      if (error) {
+        return { error: { message: error.message } };
+      }
+      
+      return { error: null, data };
+    } catch (error: any) {
+      return { error: { message: 'خطا در ارسال کد تأیید' } };
+    }
+  };
+
+  const verifyOtp = async (phoneNumber: string, otpCode: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('verify-otp', {
+        body: { phone_number: phoneNumber, otp_code: otpCode }
+      });
+      
+      if (error) {
+        return { error: { message: error.message } };
+      }
+      
+      return { error: null, data };
+    } catch (error: any) {
+      return { error: { message: 'خطا در تأیید کد' } };
+    }
+  };
+
+  const completePhoneSignUp = async (phoneNumber: string, fullName: string, email?: string) => {
+    try {
+      // Create a temporary email if none provided
+      const tempEmail = email || `${phoneNumber.replace('+', '')}@temp.local`;
+      
+      // Create user with phone number
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: tempEmail,
+        password: Math.random().toString(36).substring(2, 15), // Random password
+        options: {
+          data: {
+            full_name: fullName,
+            phone_number: phoneNumber
+          }
+        }
+      });
+
+      if (authError) {
+        return { error: authError };
+      }
+
+      // Update profile with phone number
+      if (authData.user) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({ 
+            phone_number: phoneNumber,
+            full_name: fullName,
+            email: email
+          })
+          .eq('id', authData.user.id);
+
+        if (profileError) {
+          console.error('Profile update error:', profileError);
+        }
+      }
+
+      return { error: null };
+    } catch (error: any) {
+      return { error: { message: 'خطا در ایجاد حساب کاربری' } };
+    }
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
   };
@@ -83,6 +171,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       loading,
       signUp,
       signIn,
+      signInWithGoogle,
+      sendOtp,
+      verifyOtp,
+      completePhoneSignUp,
       signOut,
       resetPassword
     }}>
