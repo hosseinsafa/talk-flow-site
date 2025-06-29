@@ -37,12 +37,24 @@ serve(async (req) => {
     if (fetchError || !otpRecord) {
       console.log('OTP verification failed:', fetchError);
       
-      // Increment attempts for invalid OTP
-      await supabase
+      // Get current attempts for this phone number and increment
+      const { data: existingOtp } = await supabase
         .from('otp_verifications')
-        .update({ attempts: supabase.raw('attempts + 1') })
+        .select('attempts')
         .eq('phone_number', phone_number)
-        .eq('verified', false);
+        .eq('verified', false)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (existingOtp) {
+        const newAttempts = existingOtp.attempts + 1;
+        await supabase
+          .from('otp_verifications')
+          .update({ attempts: newAttempts })
+          .eq('phone_number', phone_number)
+          .eq('verified', false);
+      }
 
       return new Response(
         JSON.stringify({ error: 'کد تأیید نامعتبر یا منقضی است' }),
