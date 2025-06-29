@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -179,7 +178,7 @@ const PhoneAuth = ({ onBack }: PhoneAuthProps) => {
               <p className="text-gray-300 mb-4">
                 کد تأیید به شماره {phoneNumber} ارسال شد
               </p>
-              <div className="flex justify-center">
+              <div className="flex justify-center" dir="ltr">
                 <InputOTP value={otpCode} onChange={setOtpCode} maxLength={6}>
                   <InputOTPGroup>
                     <InputOTPSlot index={0} className="bg-gray-700 border-gray-600 text-white" />
