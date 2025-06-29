@@ -1,16 +1,11 @@
 
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { 
   Image, 
-  Sparkles, 
-  Download, 
-  Settings, 
-  Palette,
-  Wand2
+  Sparkles
 } from 'lucide-react';
 
 const ImageGeneration = () => {
@@ -27,157 +22,110 @@ const ImageGeneration = () => {
     }, 3000);
   };
 
-  const styles = [
-    { name: 'واقع‌گرایانه', value: 'realistic' },
-    { name: 'هنری', value: 'artistic' },
-    { name: 'انیمیشنی', value: 'anime' },
-    { name: 'طراحی', value: 'sketch' },
+  const quickOptions = [
+    { label: 'Style', icon: '🎨' },
+    { label: 'Image prompt', icon: '🖼️' },
+    { label: 'Image style', icon: '✨' },
+    { label: '2:3', icon: '📐' },
+    { label: '1K', icon: '🔍' },
+    { label: 'Raw', icon: '⚡' }
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 p-4">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <div className="flex items-center justify-center mb-4">
-            <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
-              <Image className="w-8 h-8 text-white" />
-            </div>
-          </div>
-          <h1 className="text-4xl font-bold text-white mb-4">تولید تصویر هوشمند</h1>
-          <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-            تصاویر حرفه‌ای و هنری را با توضیح ساده متنی ایجاد کنید
-          </p>
+    <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
+      {/* Header */}
+      <div className="flex items-center mb-8">
+        <div className="w-8 h-8 bg-gray-700 rounded flex items-center justify-center mr-3">
+          <Image className="w-5 h-5 text-white" />
         </div>
+        <h1 className="text-white text-2xl font-normal">Image</h1>
+      </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Input Panel */}
-          <div className="lg:col-span-1">
-            <Card className="bg-gray-800 border-gray-700 h-fit">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <Wand2 className="w-5 h-5" />
-                  تنظیمات تولید
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    توضیح تصویر
-                  </label>
-                  <Textarea
-                    placeholder="تصویر مورد نظر خود را توضیح دهید..."
-                    value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
-                    className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 min-h-[120px]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-3">
-                    استایل تصویر
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {styles.map((style) => (
-                      <Button
-                        key={style.value}
-                        variant="outline"
-                        className="border-gray-600 text-gray-300 hover:border-purple-500 hover:text-white"
-                      >
-                        {style.name}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Settings className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm text-gray-400">تنظیمات پیشرفته</span>
-                </div>
-
-                <Button
-                  onClick={handleGenerate}
-                  disabled={!prompt.trim() || isGenerating}
-                  className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
-                >
-                  {isGenerating ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin ml-2"></div>
-                      در حال تولید...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4 ml-2" />
-                      تولید تصویر
-                    </>
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
+      {/* Main Input Container */}
+      <div className="w-full max-w-2xl">
+        <div className="bg-gray-900 rounded-lg border border-gray-700 p-6 mb-4">
+          <Textarea
+            placeholder="Describe an image and click generate..."
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            className="bg-transparent border-none text-white placeholder-gray-400 resize-none min-h-[60px] text-base focus:outline-none focus:ring-0 p-0"
+            rows={3}
+          />
+          
+          {/* Quick Options */}
+          <div className="flex flex-wrap gap-2 mt-4 mb-4">
+            {quickOptions.map((option, index) => (
+              <Badge
+                key={index}
+                variant="outline"
+                className="bg-gray-800 border-gray-600 text-gray-300 hover:bg-gray-700 cursor-pointer px-3 py-1 text-sm"
+              >
+                <span className="mr-1">{option.icon}</span>
+                {option.label}
+              </Badge>
+            ))}
           </div>
 
-          {/* Results Panel */}
-          <div className="lg:col-span-2">
-            <Card className="bg-gray-800 border-gray-700">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <Palette className="w-5 h-5" />
-                  نتایج تولید
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {isGenerating ? (
-                  <div className="flex items-center justify-center h-96 bg-gray-700 rounded-lg">
-                    <div className="text-center">
-                      <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                      <p className="text-gray-300">در حال تولید تصویر...</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Placeholder for generated images */}
-                    <div className="bg-gray-700 rounded-lg h-64 flex items-center justify-center">
-                      <div className="text-center text-gray-400">
-                        <Image className="w-12 h-12 mx-auto mb-2" />
-                        <p>تصویر تولید شده اینجا نمایش داده می‌شود</p>
-                      </div>
-                    </div>
-                    <div className="bg-gray-700 rounded-lg h-64 flex items-center justify-center">
-                      <div className="text-center text-gray-400">
-                        <Image className="w-12 h-12 mx-auto mb-2" />
-                        <p>نسخه دوم</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Sample Gallery */}
-            <Card className="bg-gray-800 border-gray-700 mt-6">
-              <CardHeader>
-                <CardTitle className="text-white">گالری نمونه</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="relative group">
-                      <div className="bg-gray-700 rounded-lg h-32 flex items-center justify-center">
-                        <Image className="w-8 h-8 text-gray-500" />
-                      </div>
-                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
-                        <Button size="sm" variant="ghost" className="text-white">
-                          <Download className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+          {/* Generate Button */}
+          <div className="flex justify-end">
+            <Button
+              onClick={handleGenerate}
+              disabled={!prompt.trim() || isGenerating}
+              className="bg-white text-black hover:bg-gray-200 px-6 py-2 rounded-md font-medium"
+            >
+              {isGenerating ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin mr-2"></div>
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Generate
+                </>
+              )}
+            </Button>
           </div>
         </div>
       </div>
+
+      {/* Model Info */}
+      <div className="absolute bottom-6 left-6">
+        <div className="flex items-center text-gray-400 text-sm">
+          <span className="mr-2">Model</span>
+          <span className="text-white">Krea 1</span>
+          <svg className="w-4 h-4 ml-1" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+          </svg>
+        </div>
+      </div>
+
+      {/* Show Examples */}
+      <div className="absolute bottom-6 right-6">
+        <button className="text-gray-400 text-sm hover:text-white transition-colors">
+          Show examples
+        </button>
+      </div>
+
+      {/* Generated Images Display Area */}
+      {isGenerating && (
+        <div className="mt-8 w-full max-w-4xl">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-gray-900 rounded-lg h-64 flex items-center justify-center border border-gray-700">
+              <div className="text-center">
+                <div className="w-12 h-12 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-gray-400">Generating...</p>
+              </div>
+            </div>
+            <div className="bg-gray-900 rounded-lg h-64 flex items-center justify-center border border-gray-700">
+              <div className="text-center">
+                <div className="w-12 h-12 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-gray-400">Generating...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
