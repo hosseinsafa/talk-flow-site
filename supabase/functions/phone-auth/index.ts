@@ -63,7 +63,7 @@ serve(async (req) => {
           body: new URLSearchParams({
             receptor: receptorPhone,
             message: message,
-            sender: '10008663' // Default Kavenegar sender number
+            sender: '2000660110' // Kavenegar's high-speed test line
           })
         });
 
