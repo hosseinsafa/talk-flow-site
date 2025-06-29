@@ -1,6 +1,5 @@
-
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Image, Menu } from 'lucide-react';
+import { Send, Image, Menu, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,7 +8,9 @@ import { Label } from '@/components/ui/label';
 import ChatMessage from './ChatMessage';
 import ChatSidebar from './ChatSidebar';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { useNavigate } from 'react-router-dom';
 
 interface Message {
   id: string;
@@ -45,6 +46,8 @@ const ChatInterface = () => {
   const [currentSessionId, setCurrentSessionId] = useState<string>('default');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
   // Image generation keywords for automatic detection
   const imageKeywords = ['generate an image of', 'create an image', 'draw', 'illustrate', 'make a picture', 'generate image'];
@@ -60,6 +63,26 @@ const ChatInterface = () => {
   const isImageRequest = (text: string) => {
     const lowerText = text.toLowerCase();
     return imageKeywords.some(keyword => lowerText.includes(keyword));
+  };
+
+  const updateUsageCount = async (type: 'chat' | 'image') => {
+    if (!user) return;
+    
+    try {
+      const field = type === 'chat' ? 'chat_messages_count' : 'images_generated_count';
+      
+      const { error } = await supabase.rpc('increment', {
+        table_name: 'user_usage',
+        column_name: field,
+        user_id: user.id
+      });
+
+      if (error) {
+        console.error('Error updating usage:', error);
+      }
+    } catch (error) {
+      console.error('Error updating usage:', error);
+    }
   };
 
   const generateImage = async (prompt: string) => {
@@ -92,7 +115,7 @@ const ChatInterface = () => {
   };
 
   const saveCurrentSession = () => {
-    if (messages.length <= 1) return; // Don't save sessions with only the initial message
+    if (messages.length <= 1) return;
 
     const sessionTitle = generateSessionTitle(
       messages.find(m => m.role === 'user')?.content || 'New Chat'
@@ -164,12 +187,11 @@ const ChatInterface = () => {
     setIsLoading(true);
 
     try {
-      // Determine if this should be an image generation request
       const shouldGenerateImage = imageMode || isImageRequest(input.trim());
 
       if (shouldGenerateImage) {
-        // Generate image using DALL·E 3
         const imageUrl = await generateImage(input.trim());
+        await updateUsageCount('image');
         
         const assistantMessage: Message = {
           id: (Date.now() + 1).toString(),
@@ -181,7 +203,6 @@ const ChatInterface = () => {
 
         setMessages(prev => [...prev, assistantMessage]);
       } else {
-        // Regular chat completion using our Edge Function
         const { data, error } = await supabase.functions.invoke('chat', {
           body: {
             messages: [
@@ -200,6 +221,8 @@ const ChatInterface = () => {
         if (error) {
           throw new Error(error.message);
         }
+
+        await updateUsageCount('chat');
 
         const assistantMessage: Message = {
           id: (Date.now() + 1).toString(),
@@ -243,14 +266,24 @@ const ChatInterface = () => {
           <div className="max-w-4xl mx-auto">
             <div className="flex items-center justify-between mb-3">
               <h1 className="text-2xl font-bold text-white">AI Chat Assistant</h1>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="text-gray-400 hover:text-white"
-              >
-                <Menu className="w-5 h-5" />
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={() => navigate('/account')}
+                  variant="ghost"
+                  size="icon"
+                  className="text-gray-400 hover:text-white"
+                >
+                  <User className="w-5 h-5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  className="text-gray-400 hover:text-white"
+                >
+                  <Menu className="w-5 h-5" />
+                </Button>
+              </div>
             </div>
             
             {/* Model Selector and Image Mode Toggle */}
