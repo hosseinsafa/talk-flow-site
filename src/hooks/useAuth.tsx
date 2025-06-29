@@ -112,9 +112,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const completePhoneSignUp = async (phoneNumber: string, fullName: string, email?: string) => {
     try {
-      // Create a temporary email if none provided
-      const tempEmail = email || `${phoneNumber.replace(/[+\s]/g, '')}@temp.local`;
+      // Create a proper email format that Supabase will accept
+      const cleanPhone = phoneNumber.replace(/[+\s-]/g, '');
+      const tempEmail = email || `phone${cleanPhone}@tempuser.app`;
       const tempPassword = Math.random().toString(36).substring(2, 15);
+      
+      console.log('Creating user with email:', tempEmail);
       
       // Create user with phone number
       const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -129,18 +132,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       });
 
       if (authError) {
+        console.error('Auth error:', authError);
         return { error: authError };
       }
 
+      console.log('User created, now signing in...');
+
       // Sign in the user immediately after account creation
-      const { error: signInError } = await supabase.auth.signInWithPassword({
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email: tempEmail,
         password: tempPassword
       });
 
       if (signInError) {
+        console.error('Sign in error:', signInError);
         return { error: signInError };
       }
+
+      console.log('User signed in successfully:', signInData);
 
       // Update profile with phone number after signing in
       if (authData.user) {
@@ -160,6 +169,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       return { error: null };
     } catch (error: any) {
+      console.error('Complete phone signup error:', error);
       return { error: { message: 'خطا در ایجاد حساب کاربری' } };
     }
   };
