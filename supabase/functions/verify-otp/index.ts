@@ -32,12 +32,17 @@ serve(async (req) => {
       .single();
 
     if (fetchError || !otpRecord) {
-      // Increment attempts for this phone number
-      await supabase
-        .from('otp_verifications')
-        .update({ attempts: supabase.sql`attempts + 1` })
-        .eq('phone_number', phone_number)
-        .eq('verified', false);
+      // Increment attempts for this phone number - use RPC call for atomic increment
+      await supabase.rpc('increment_otp_attempts', { 
+        input_phone_number: phone_number 
+      }).catch(() => {
+        // If RPC doesn't exist, use regular update
+        return supabase
+          .from('otp_verifications')
+          .update({ attempts: otpRecord?.attempts ? otpRecord.attempts + 1 : 1 })
+          .eq('phone_number', phone_number)
+          .eq('verified', false);
+      });
 
       return new Response(
         JSON.stringify({ error: 'کد تأیید نامعتبر یا منقضی است' }),
@@ -76,9 +81,11 @@ serve(async (req) => {
 
     if (existingProfile) {
       // User exists, create session for existing user
+      const tempEmail = existingProfile.email || `${phone_number.replace('+', '')}@temp.local`;
+      
       const { data: authData, error: signInError } = await supabase.auth.admin.generateLink({
         type: 'magiclink',
-        email: existingProfile.email || `${phone_number.replace('+', '')}@temp.local`,
+        email: tempEmail,
         options: {
           redirectTo: `${req.headers.get('origin') || 'http://localhost:3000'}/`
         }

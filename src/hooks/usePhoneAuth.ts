@@ -70,11 +70,15 @@ export const usePhoneAuth = () => {
         variant: "destructive"
       });
     } else if (data) {
-      if (data.user_exists) {
+      if (data.user_exists && data.auth_url) {
+        // Redirect to auth URL for existing users
+        window.location.href = data.auth_url;
+      } else if (data.user_exists) {
         toast({
           title: 'موفق',
           description: 'ورود موفقیت‌آمیز'
         });
+        // Should be automatically redirected by auth state change
       } else {
         setStep('complete');
       }
