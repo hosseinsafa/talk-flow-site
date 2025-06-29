@@ -22,7 +22,7 @@ serve(async (req) => {
     );
 
     if (req.method === 'POST') {
-      // Send OTP using Kavenegar VerifyLookup
+      // Send OTP using Kavenegar Send API
       if (phone_number) {
         // Verify phone number format
         const phoneRegex = /^(\+98|0098|98|0)?9[0-9]{9}$/;
@@ -49,13 +49,22 @@ serve(async (req) => {
         const fullPhone = normalizedPhone.startsWith('9') ? '+98' + normalizedPhone : phone_number;
         const receptorPhone = normalizedPhone.startsWith('9') ? '0' + normalizedPhone : phone_number;
         
-        // Use Kavenegar VerifyLookup API to send OTP
-        const kavenegarUrl = `https://api.kavenegar.com/v1/${kavenegarApiKey}/verify/lookup.json?receptor=${receptorPhone}&token=${otpCode}&template=registerverify`;
+        // Use Kavenegar Send API to send OTP
+        const message = `Your verification code is: ${otpCode}`;
+        const kavenegarUrl = `https://api.kavenegar.com/v1/${kavenegarApiKey}/sms/send.json`;
         
-        console.log('Sending OTP via Kavenegar VerifyLookup to:', receptorPhone, 'with code:', otpCode);
+        console.log('Sending OTP via Kavenegar Send API to:', receptorPhone, 'with code:', otpCode);
         
         const kavenegarResponse = await fetch(kavenegarUrl, {
-          method: 'GET',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            receptor: receptorPhone,
+            message: message,
+            sender: '10008663' // Default Kavenegar sender number
+          })
         });
 
         const kavenegarResult = await kavenegarResponse.json();
@@ -97,12 +106,11 @@ serve(async (req) => {
         );
       }
     } else if (req.method === 'PATCH') {
-      // Verify OTP using Kavenegar VerifyLookup
+      // Verify OTP
       const { phone_number: phoneNum, otp_code } = await req.json();
       
       const normalizedPhone = phoneNum.replace(/^(\+98|0098|98|0)/, '');
       const fullPhone = normalizedPhone.startsWith('9') ? '+98' + normalizedPhone : phoneNum;
-      const receptorPhone = normalizedPhone.startsWith('9') ? '0' + normalizedPhone : phoneNum;
 
       // Get stored OTP from database
       const { data: otpRecords, error: fetchError } = await supabaseClient
@@ -140,42 +148,6 @@ serve(async (req) => {
 
         return new Response(
           JSON.stringify({ error: 'Invalid OTP code' }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-        );
-      }
-
-      // Get Kavenegar API key for verification
-      const kavenegarApiKey = Deno.env.get('KAVENEGAR_API_KEY');
-      if (!kavenegarApiKey) {
-        return new Response(
-          JSON.stringify({ error: 'SMS service not configured' }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-        );
-      }
-
-      // Verify OTP with Kavenegar using the same VerifyLookup endpoint
-      const kavenegarVerifyUrl = `https://api.kavenegar.com/v1/${kavenegarApiKey}/verify/lookup.json?receptor=${receptorPhone}&token=${otp_code}&template=registerverify`;
-      
-      console.log('Verifying OTP with Kavenegar for:', receptorPhone, 'with code:', otp_code);
-      
-      const kavenegarVerifyResponse = await fetch(kavenegarVerifyUrl, {
-        method: 'GET',
-      });
-
-      const kavenegarVerifyResult = await kavenegarVerifyResponse.json();
-      console.log('Kavenegar verification response:', kavenegarVerifyResult);
-
-      if (!kavenegarVerifyResponse.ok || kavenegarVerifyResult.return?.status !== 200) {
-        console.error('Kavenegar verification failed:', kavenegarVerifyResult);
-        
-        // Increment attempts
-        await supabaseClient
-          .from('otp_verifications')
-          .update({ attempts: otpRecord.attempts + 1 })
-          .eq('id', otpRecord.id);
-
-        return new Response(
-          JSON.stringify({ error: 'OTP verification failed' }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
         );
       }
