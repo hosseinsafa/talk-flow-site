@@ -1,3 +1,4 @@
+
 import { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -112,12 +113,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const completePhoneSignUp = async (phoneNumber: string, fullName: string, email?: string) => {
     try {
       // Create a temporary email if none provided
-      const tempEmail = email || `${phoneNumber.replace('+', '')}@temp.local`;
+      const tempEmail = email || `${phoneNumber.replace(/[+\s]/g, '')}@temp.local`;
+      const tempPassword = Math.random().toString(36).substring(2, 15);
       
       // Create user with phone number
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: tempEmail,
-        password: Math.random().toString(36).substring(2, 15), // Random password
+        password: tempPassword,
         options: {
           data: {
             full_name: fullName,
@@ -130,7 +132,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return { error: authError };
       }
 
-      // Update profile with phone number
+      // Sign in the user immediately after account creation
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: tempEmail,
+        password: tempPassword
+      });
+
+      if (signInError) {
+        return { error: signInError };
+      }
+
+      // Update profile with phone number after signing in
       if (authData.user) {
         const { error: profileError } = await supabase
           .from('profiles')
