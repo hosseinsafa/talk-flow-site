@@ -136,10 +136,9 @@ const Payment = () => {
                 
                 {plan.current ? (
                   <Button 
-                    className="w-full" 
+                    className="w-full border-gray-600 text-gray-400" 
                     variant="outline" 
                     disabled
-                    className="border-gray-600 text-gray-400"
                   >
                     Current Plan
                   </Button>

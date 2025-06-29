@@ -71,10 +71,12 @@ const ChatInterface = () => {
     try {
       const field = type === 'chat' ? 'chat_messages_count' : 'images_generated_count';
       
-      const { error } = await supabase.rpc('increment', {
-        table_name: 'user_usage',
-        column_name: field,
-        user_id: user.id
+      const { error } = await supabase.functions.invoke('increment', {
+        body: {
+          table_name: 'user_usage',
+          column_name: field,
+          user_id: user.id
+        }
       });
 
       if (error) {
