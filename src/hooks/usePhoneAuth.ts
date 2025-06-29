@@ -1,7 +1,7 @@
 
 import { useState } from 'react';
 import { useToast } from './use-toast';
-import { validateIranianPhone } from '@/utils/phoneValidation';
+import { validateIranianPhone, formatPhoneToE164 } from '@/utils/phoneValidation';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -69,11 +69,15 @@ export const usePhoneAuth = () => {
     setLoading(true);
 
     try {
-      console.log('Verifying OTP for phone:', phoneNumber, 'with code:', otpCode);
+      // Format phone number to E.164 before sending to Supabase
+      const formattedPhone = formatPhoneToE164(phoneNumber);
+      console.log('Original phone:', phoneNumber);
+      console.log('Formatted phone (E.164):', formattedPhone);
+      console.log('Verifying OTP with code:', otpCode);
       
       const { data, error } = await supabase.functions.invoke('phone-auth', {
         body: { 
-          phone: phoneNumber,
+          phone: formattedPhone,
           code: otpCode
         }
       });
