@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { usePhoneAuth } from '@/hooks/usePhoneAuth';
 import { PhoneNumberStep } from './auth/PhoneNumberStep';
 import { OtpVerificationStep } from './auth/OtpVerificationStep';
-import { ProfileCompletionStep } from './auth/ProfileCompletionStep';
 
 interface PhoneAuthProps {
   onBack: () => void;
@@ -18,21 +17,15 @@ const PhoneAuth = ({ onBack }: PhoneAuthProps) => {
     setPhoneNumber,
     otpCode,
     setOtpCode,
-    fullName,
-    setFullName,
-    email,
-    setEmail,
     loading,
     handleSendOtp,
-    handleVerifyOtp,
-    handleCompleteSignUp
+    handleVerifyOtp
   } = usePhoneAuth();
 
   const getStepTitle = () => {
     switch (step) {
       case 'phone': return 'ورود با شماره موبایل';
       case 'otp': return 'تأیید کد';
-      case 'complete': return 'تکمیل اطلاعات';
     }
   };
 
@@ -57,17 +50,6 @@ const PhoneAuth = ({ onBack }: PhoneAuthProps) => {
             onSubmit={handleVerifyOtp}
             loading={loading}
             onChangePhone={() => setStep('phone')}
-          />
-        );
-      case 'complete':
-        return (
-          <ProfileCompletionStep
-            fullName={fullName}
-            setFullName={setFullName}
-            email={email}
-            setEmail={setEmail}
-            onSubmit={handleCompleteSignUp}
-            loading={loading}
           />
         );
     }

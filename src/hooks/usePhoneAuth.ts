@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { useAuth } from './useAuth';
 import { useToast } from './use-toast';
@@ -5,14 +6,12 @@ import { validateIranianPhone } from '@/utils/phoneValidation';
 import { useNavigate } from 'react-router-dom';
 
 export const usePhoneAuth = () => {
-  const [step, setStep] = useState<'phone' | 'otp' | 'complete'>('phone');
+  const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otpCode, setOtpCode] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   
-  const { sendOtp, verifyOtp, completePhoneSignUp } = useAuth();
+  const { sendPhoneOtp, verifyPhoneOtp } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -30,7 +29,10 @@ export const usePhoneAuth = () => {
       return;
     }
 
-    const { error } = await sendOtp(phoneNumber);
+    // Convert Iranian phone format to international format
+    const internationalPhone = phoneNumber.replace(/^0/, '+98');
+
+    const { error } = await sendPhoneOtp(internationalPhone);
     
     if (error) {
       toast({
@@ -62,7 +64,10 @@ export const usePhoneAuth = () => {
 
     setLoading(true);
 
-    const { error, data } = await verifyOtp(phoneNumber, otpCode);
+    // Convert Iranian phone format to international format
+    const internationalPhone = phoneNumber.replace(/^0/, '+98');
+
+    const { error } = await verifyPhoneOtp(internationalPhone, otpCode);
     
     if (error) {
       toast({
@@ -70,52 +75,13 @@ export const usePhoneAuth = () => {
         description: error.message,
         variant: "destructive"
       });
-    } else if (data) {
-      if (data.user_exists && data.auth_url) {
-        // Redirect to auth URL for existing users
-        window.location.href = data.auth_url;
-      } else if (data.user_exists) {
-        toast({
-          title: 'موفق',
-          description: 'ورود موفقیت‌آمیز'
-        });
-        // Should be automatically redirected by auth state change
-      } else {
-        setStep('complete');
-      }
-    }
-    
-    setLoading(false);
-  };
-
-  const handleCompleteSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!fullName.trim()) {
-      toast({
-        title: 'خطا',
-        description: 'لطفاً نام خود را وارد کنید',
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setLoading(true);
-
-    const { error } = await completePhoneSignUp(phoneNumber, fullName, email);
-    
-    if (error) {
-      toast({
-        title: 'خطا در ایجاد حساب',
-        description: error.message,
-        variant: "destructive"
-      });
     } else {
       toast({
         title: 'موفق',
-        description: 'حساب شما با موفقیت ایجاد شد'
+        description: 'ورود موفقیت‌آمیز'
       });
       
-      // Redirect to main page after successful registration
+      // Redirect to main page after successful authentication
       setTimeout(() => {
         navigate('/');
       }, 1500);
@@ -131,13 +97,8 @@ export const usePhoneAuth = () => {
     setPhoneNumber,
     otpCode,
     setOtpCode,
-    fullName,
-    setFullName,
-    email,
-    setEmail,
     loading,
     handleSendOtp,
-    handleVerifyOtp,
-    handleCompleteSignUp
+    handleVerifyOtp
   };
 };
