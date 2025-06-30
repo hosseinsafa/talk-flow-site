@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Menu, ArrowUp, Plus, Mic } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -184,49 +183,72 @@ const ChatInterface = () => {
             lowerText.includes('بساز'));
   };
 
-  const enhanceImagePrompt = (originalPrompt: string): string => {
-    // Enhanced prompt engineering for DALL·E 3 to match ChatGPT quality
-    const qualityEnhancements = [
-      "high resolution",
-      "ultra realistic", 
-      "8K quality",
-      "cinematic lighting",
-      "professional photography",
-      "highly detailed",
-      "masterpiece"
-    ];
-    
-    // Check if the prompt already contains quality keywords to avoid redundancy
-    const lowerPrompt = originalPrompt.toLowerCase();
-    const hasQualityKeywords = qualityEnhancements.some(keyword => 
-      lowerPrompt.includes(keyword.toLowerCase())
-    );
-    
-    if (hasQualityKeywords) {
-      // If user already specified quality terms, use their prompt as-is
+  const rewritePromptWithGPT4 = async (originalPrompt: string): Promise<string> => {
+    try {
+      console.log('Rewriting prompt with GPT-4:', originalPrompt);
+      
+      const { data, error } = await supabase.functions.invoke('chat', {
+        body: {
+          messages: [
+            {
+              role: 'system',
+              content: `You are a professional prompt engineer for DALL·E 3. Your job is to rewrite user prompts to generate the highest quality, most detailed images possible.
+
+RULES:
+1. Always enhance with: "highly detailed, ultra realistic, cinematic lighting, 8K quality, professional photography"
+2. Add specific scene details, lighting, composition, and style elements
+3. Preserve the original user intent completely
+4. Make the prompt descriptive and vivid
+5. For Persian text, understand the meaning and create an English enhanced prompt
+6. Keep the enhanced prompt under 1000 characters for DALL·E 3
+
+Example transformations:
+- "a cat" → "a highly detailed, ultra realistic cat with cinematic lighting, professional photography, 8K quality, sitting gracefully with soft natural lighting"
+- "یک گربه" → "a highly detailed, ultra realistic Persian cat with beautiful fur texture, cinematic lighting, professional photography, 8K quality, elegant pose with warm ambient lighting"
+
+Rewrite this prompt:`
+            },
+            {
+              role: 'user',
+              content: originalPrompt
+            }
+          ],
+          model: 'gpt-4o',
+          max_tokens: 200,
+          temperature: 0.7
+        }
+      });
+
+      if (error) {
+        console.error('Error rewriting prompt:', error);
+        // Fallback to original prompt if rewrite fails
+        return originalPrompt;
+      }
+
+      const enhancedPrompt = data.choices[0]?.message?.content || originalPrompt;
+      console.log('Enhanced prompt:', enhancedPrompt);
+      return enhancedPrompt;
+    } catch (error) {
+      console.error('Error in prompt rewriting:', error);
       return originalPrompt;
     }
-    
-    // Enhance the prompt with quality terms
-    const enhancement = "high resolution, ultra realistic, 8K quality, cinematic lighting, highly detailed";
-    return `${originalPrompt}, ${enhancement}`;
   };
 
   const generateImage = async (prompt: string) => {
     try {
-      console.log('Starting DALL·E 3 image generation with prompt:', prompt);
+      console.log('Starting DALL·E 3 image generation with original prompt:', prompt);
       
-      // Enhance the prompt for better quality
-      const enhancedPrompt = enhanceImagePrompt(prompt);
-      console.log('Enhanced prompt:', enhancedPrompt);
+      // Rewrite prompt using GPT-4 for maximum quality
+      const enhancedPrompt = await rewritePromptWithGPT4(prompt);
+      console.log('Using enhanced prompt for DALL·E 3:', enhancedPrompt);
       
       // Call the generate-image function (DALL·E 3 via OpenAI)
       const { data, error } = await supabase.functions.invoke('generate-image', {
         body: {
           prompt: enhancedPrompt,
           model: 'dall-e-3',
-          size: '1024x1024',
-          quality: 'hd', // Use HD quality for best results
+          size: '1024x1536', // Updated size for better quality
+          quality: 'hd', // HD quality for best results
           n: 1
         }
       });
@@ -239,8 +261,8 @@ const ChatInterface = () => {
       console.log('DALL·E 3 generation completed:', data);
       
       if (data.data && data.data[0] && data.data[0].url) {
-        // Save image generation to database with original prompt
-        await saveImageGeneration(prompt, data.data[0].url);
+        // Save image generation to database with enhanced prompt
+        await saveImageGeneration(enhancedPrompt, data.data[0].url);
         return data.data[0].url;
       } else {
         throw new Error('No image URL returned from DALL·E 3');
@@ -334,7 +356,7 @@ const ChatInterface = () => {
         setMessages(prev => [...prev, loadingMessage]);
 
         try {
-          // Generate image using DALL·E 3
+          // Generate image using DALL·E 3 with GPT-4 enhanced prompt
           const imageUrl = await generateImage(currentInput);
           
           // Replace loading message with image
