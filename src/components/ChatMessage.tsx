@@ -26,14 +26,14 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
   const hasPersianText = containsPersian(message.content);
   
   return (
-    <div className={`group w-full ${isUser ? 'bg-transparent' : 'bg-[#f7f7f8] dark:bg-[#2f2f2f]'}`}>
-      <div className="max-w-3xl mx-auto px-4 py-6 flex gap-4">
+    <div className={`group w-full ${isUser ? 'bg-transparent' : 'bg-[#2f2f2f]'}`}>
+      <div className="max-w-4xl mx-auto px-6 py-6 flex gap-6">
         {/* Avatar */}
         <div className="flex-shrink-0">
-          <div className={`w-8 h-8 rounded-sm flex items-center justify-center ${
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
             isUser 
               ? 'bg-[#19c37d] text-white' 
-              : 'bg-[#10a37f] text-white'
+              : 'bg-[#19c37d] text-white'
           }`}>
             {isUser ? (
               <User className="w-4 h-4" />
@@ -46,7 +46,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div 
-            className="text-gray-800 dark:text-gray-100 leading-7"
+            className="text-white leading-relaxed"
             dir={hasPersianText ? 'rtl' : 'ltr'}
             style={{
               textAlign: hasPersianText ? 'right' : 'left',
@@ -66,7 +66,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
               <img 
                 src={message.imageUrl} 
                 alt="Generated image"
-                className="rounded-lg max-w-full h-auto shadow-md"
+                className="rounded-xl max-w-full h-auto shadow-lg"
                 style={{ maxHeight: '400px' }}
               />
             </div>

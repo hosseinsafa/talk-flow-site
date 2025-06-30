@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Menu, ArrowUp, Plus } from 'lucide-react';
+import { Send, Menu, ArrowUp, Plus, Mic } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,7 +9,6 @@ import ChatSidebar from './ChatSidebar';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import { t } from '@/lib/localization';
 
 interface Message {
   id: string;
@@ -31,7 +30,7 @@ const ChatInterface = () => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedModel, setSelectedModel] = useState('gpt-4o');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [isNewChat, setIsNewChat] = useState(true);
@@ -239,7 +238,7 @@ const ChatInterface = () => {
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: data.choices[0]?.message?.content || 'متأسفم، نتوانستم پاسخی تولید کنم.',
+        content: data.choices[0]?.message?.content || 'Sorry, I could not generate a response.',
         role: 'assistant',
         timestamp: new Date()
       };
@@ -254,8 +253,8 @@ const ChatInterface = () => {
     } catch (error) {
       console.error('Error:', error);
       toast({
-        title: t.chat.error,
-        description: t.chat.errorMessage,
+        title: "Error",
+        description: "Failed to send message. Please try again.",
         variant: "destructive"
       });
     } finally {
@@ -287,8 +286,12 @@ const ChatInterface = () => {
     adjustTextareaHeight();
   }, [input]);
 
+  const getUserName = () => {
+    return user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'there';
+  };
+
   return (
-    <div className="flex h-screen bg-white dark:bg-[#212121]">
+    <div className="flex h-screen bg-[#212121] text-white">
       {/* Sidebar */}
       <ChatSidebar
         isOpen={sidebarOpen}
@@ -302,25 +305,25 @@ const ChatInterface = () => {
       {/* Main Chat Area */}
       <div className="flex flex-col flex-1 relative">
         {/* Header */}
-        <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#212121]">
+        <div className="flex items-center justify-between p-4 border-b border-white/10 bg-[#212121]">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 h-9 w-9 lg:hidden"
+              className="text-gray-400 hover:text-white hover:bg-white/10 h-10 w-10 lg:hidden"
             >
               <Menu className="w-5 h-5" />
             </Button>
-            <h1 className="text-lg font-semibold text-gray-800 dark:text-white">ChatGPT</h1>
+            <h1 className="text-xl font-semibold text-white">ChatGPT</h1>
           </div>
           
           <div className="flex items-center gap-3">
             <Select value={selectedModel} onValueChange={setSelectedModel}>
-              <SelectTrigger className="w-32 h-8 text-xs border-gray-300 dark:border-gray-600">
+              <SelectTrigger className="w-36 h-9 text-sm border-white/20 bg-[#2f2f2f] text-white">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="bg-[#2f2f2f] border-white/20 text-white">
                 <SelectItem value="gpt-4o">GPT-4o</SelectItem>
                 <SelectItem value="gpt-3.5-turbo">GPT-3.5</SelectItem>
               </SelectContent>
@@ -329,7 +332,7 @@ const ChatInterface = () => {
               onClick={startNewChat}
               variant="ghost"
               size="icon"
-              className="text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 h-9 w-9"
+              className="text-gray-400 hover:text-white hover:bg-white/10 h-10 w-10"
             >
               <Plus className="w-5 h-5" />
             </Button>
@@ -340,9 +343,26 @@ const ChatInterface = () => {
         <div className="flex-1 overflow-y-auto">
           {messages.length === 0 ? (
             <div className="flex items-center justify-center h-full">
-              <div className="text-center text-gray-500 dark:text-gray-400">
-                <h2 className="text-2xl font-semibold mb-2">How can I help you today?</h2>
-                <p className="text-sm">Start a conversation by typing a message below.</p>
+              <div className="text-center text-white max-w-2xl px-6">
+                <h2 className="text-4xl font-semibold mb-6">How can I help, {getUserName()}?</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                  <div className="p-4 rounded-xl bg-[#2f2f2f] hover:bg-[#3f3f3f] transition-colors cursor-pointer">
+                    <h3 className="font-medium mb-2">Create a presentation</h3>
+                    <p className="text-sm text-gray-400">about the solar system</p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-[#2f2f2f] hover:bg-[#3f3f3f] transition-colors cursor-pointer">
+                    <h3 className="font-medium mb-2">Write code</h3>
+                    <p className="text-sm text-gray-400">for a simple calculator</p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-[#2f2f2f] hover:bg-[#3f3f3f] transition-colors cursor-pointer">
+                    <h3 className="font-medium mb-2">Explain quantum physics</h3>
+                    <p className="text-sm text-gray-400">in simple terms</p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-[#2f2f2f] hover:bg-[#3f3f3f] transition-colors cursor-pointer">
+                    <h3 className="font-medium mb-2">Plan a trip</h3>
+                    <p className="text-sm text-gray-400">to Japan for 7 days</p>
+                  </div>
+                </div>
               </div>
             </div>
           ) : (
@@ -351,15 +371,15 @@ const ChatInterface = () => {
                 <ChatMessage key={message.id} message={message} />
               ))}
               {isLoading && (
-                <div className="bg-[#f7f7f8] dark:bg-[#2f2f2f]">
-                  <div className="max-w-3xl mx-auto px-4 py-6 flex gap-4">
+                <div className="bg-[#2f2f2f]">
+                  <div className="max-w-4xl mx-auto px-6 py-6 flex gap-6">
                     <div className="flex-shrink-0">
-                      <div className="w-8 h-8 rounded-sm bg-[#10a37f] text-white flex items-center justify-center">
+                      <div className="w-8 h-8 rounded-full bg-[#19c37d] text-white flex items-center justify-center">
                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                       </div>
                     </div>
                     <div className="flex-1">
-                      <div className="text-gray-800 dark:text-gray-100 leading-7">
+                      <div className="text-white leading-relaxed">
                         Thinking...
                       </div>
                     </div>
@@ -372,10 +392,10 @@ const ChatInterface = () => {
         </div>
 
         {/* Input */}
-        <div className="p-4 bg-white dark:bg-[#212121] border-t border-gray-200 dark:border-gray-800">
-          <div className="max-w-3xl mx-auto">
+        <div className="p-6 bg-[#212121]">
+          <div className="max-w-4xl mx-auto">
             <form onSubmit={handleSubmit} className="relative">
-              <div className="relative bg-white dark:bg-[#2f2f2f] border border-gray-300 dark:border-gray-600 rounded-3xl shadow-sm hover:shadow-md transition-shadow">
+              <div className="relative bg-[#2f2f2f] border border-white/20 rounded-3xl shadow-lg hover:border-white/30 transition-colors">
                 <Textarea
                   ref={textareaRef}
                   value={input}
@@ -383,19 +403,32 @@ const ChatInterface = () => {
                   onKeyDown={handleKeyDown}
                   placeholder="Message ChatGPT..."
                   disabled={isLoading}
-                  className="resize-none border-0 bg-transparent px-4 py-3 pr-12 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-0 focus:outline-none min-h-[48px] max-h-[200px] leading-6"
+                  className="resize-none border-0 bg-transparent px-6 py-4 pr-20 text-white placeholder-gray-400 focus:ring-0 focus:outline-none min-h-[56px] max-h-[200px] leading-6 text-base"
                   style={{ height: 'auto' }}
                 />
-                <Button
-                  type="submit"
-                  disabled={isLoading || !input.trim()}
-                  size="icon"
-                  className="absolute right-2 bottom-2 h-8 w-8 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-gray-600 dark:text-gray-300"
-                >
-                  <ArrowUp className="w-4 h-4" />
-                </Button>
+                <div className="absolute right-3 bottom-3 flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 rounded-full text-gray-400 hover:text-white hover:bg-white/10"
+                  >
+                    <Mic className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={isLoading || !input.trim()}
+                    size="icon"
+                    className="h-8 w-8 rounded-full bg-white text-black hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <ArrowUp className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
             </form>
+            <p className="text-xs text-gray-500 text-center mt-3">
+              ChatGPT can make mistakes. Check important info.
+            </p>
           </div>
         </div>
       </div>

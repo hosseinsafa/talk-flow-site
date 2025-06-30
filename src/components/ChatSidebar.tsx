@@ -1,9 +1,8 @@
 
 import React from 'react';
-import { Plus, MessageSquare, X } from 'lucide-react';
+import { Plus, MessageSquare, X, Search, Library, Code, Video, Zap, FolderPlus, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { t } from '@/lib/localization';
 
 interface ChatSession {
   id: string;
@@ -66,6 +65,17 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
   const groupedSessions = groupSessionsByDate(sessions);
   const groupOrder = ['Today', 'Yesterday', 'Previous 7 days', 'Older'];
 
+  const navigationItems = [
+    { icon: Plus, label: 'New Chat', action: onNewChat, highlight: true },
+    { icon: Search, label: 'Search Chats', action: () => {} },
+    { icon: Library, label: 'Library', action: () => {} },
+    { icon: Code, label: 'Codex', action: () => {} },
+    { icon: Video, label: 'Sora', action: () => {} },
+    { icon: Sparkles, label: 'GPTs', action: () => {} },
+    { icon: FolderPlus, label: 'New Project', action: () => {} },
+    { icon: Zap, label: 'Ai', action: () => {} },
+  ];
+
   return (
     <>
       {/* Mobile overlay */}
@@ -79,7 +89,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
       {/* Sidebar */}
       <div
         className={`
-          fixed left-0 top-0 h-full w-64 bg-[#171717] border-r border-gray-800/50
+          fixed left-0 top-0 h-full w-64 bg-[#171717] border-r border-white/10
           transform transition-transform duration-300 ease-in-out z-50
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}
           lg:relative lg:translate-x-0 lg:z-auto
@@ -88,28 +98,35 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
       >
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="flex items-center justify-between p-3 border-b border-gray-800/50">
-            <h2 className="text-sm font-medium text-white">ChatGPT</h2>
+          <div className="flex items-center justify-between p-3 border-b border-white/10">
+            <h2 className="text-lg font-semibold text-white">ChatGPT</h2>
             <Button
               variant="ghost"
               size="icon"
               onClick={onClose}
-              className="text-gray-400 hover:text-white hover:bg-gray-800 h-8 w-8 lg:hidden"
+              className="text-gray-400 hover:text-white hover:bg-white/10 h-8 w-8 lg:hidden"
             >
               <X className="w-4 h-4" />
             </Button>
           </div>
 
-          {/* New Chat Button */}
-          <div className="p-3">
-            <Button
-              onClick={onNewChat}
-              className="w-full bg-transparent border border-gray-600 hover:bg-gray-800 text-white text-sm h-9 justify-start gap-2"
-              variant="outline"
-            >
-              <Plus className="w-4 h-4" />
-              New chat
-            </Button>
+          {/* Navigation Items */}
+          <div className="p-3 space-y-1">
+            {navigationItems.map((item, index) => (
+              <Button
+                key={index}
+                onClick={item.action}
+                variant="ghost"
+                className={`w-full justify-start gap-3 h-10 text-sm font-medium ${
+                  item.highlight 
+                    ? 'bg-white/10 text-white hover:bg-white/20' 
+                    : 'text-gray-300 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <item.icon className="w-4 h-4" />
+                {item.label}
+              </Button>
+            ))}
           </div>
 
           {/* Chat Sessions List */}
@@ -121,7 +138,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
                 return (
                   <div key={group}>
-                    <div className="text-xs font-medium text-gray-400 mb-2 px-2">
+                    <div className="text-xs font-medium text-gray-400 mb-2 px-2 uppercase tracking-wider">
                       {group}
                     </div>
                     <div className="space-y-1">
@@ -132,14 +149,14 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
                             key={session.id}
                             onClick={() => onSelectSession(session.id)}
                             className={`
-                              w-full p-2 rounded-lg text-left transition-colors text-sm
+                              w-full p-3 rounded-lg text-left transition-colors text-sm
                               ${currentSessionId === session.id 
-                                ? 'bg-gray-800 text-white' 
-                                : 'text-gray-300 hover:bg-gray-800/50'
+                                ? 'bg-white/10 text-white' 
+                                : 'text-gray-300 hover:bg-white/5 hover:text-white'
                               }
                             `}
                           >
-                            <div className="truncate">
+                            <div className="truncate font-medium">
                               {session.title}
                             </div>
                           </button>
@@ -150,9 +167,10 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
                 );
               })}
               {sessions.length === 0 && (
-                <div className="text-center text-gray-400 py-8">
-                  <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <div className="text-center text-gray-400 py-12">
+                  <MessageSquare className="w-8 h-8 mx-auto mb-3 opacity-50" />
                   <p className="text-sm">No conversations yet</p>
+                  <p className="text-xs text-gray-500 mt-1">Start a new chat to begin</p>
                 </div>
               )}
             </div>
