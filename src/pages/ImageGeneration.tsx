@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -68,6 +67,25 @@ const ImageGeneration = () => {
     try {
       console.log('Starting image generation...');
       
+      // Get the current session to ensure we have a valid token
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('Session error:', sessionError);
+        toast.error('خطا در احراز هویت');
+        setIsGenerating(false);
+        return;
+      }
+
+      if (!session) {
+        console.error('No active session found');
+        toast.error('جلسه کاربری منقضی شده است');
+        setIsGenerating(false);
+        return;
+      }
+
+      console.log('Session found, access token present:', !!session.access_token);
+      
       const { data, error } = await supabase.functions.invoke('comfyui-generate', {
         body: {
           prompt,
@@ -79,7 +97,12 @@ const ImageGeneration = () => {
         }
       });
 
-      if (error) throw error;
+      console.log('Function invoke result:', { data, error });
+
+      if (error) {
+        console.error('Function invoke error:', error);
+        throw error;
+      }
 
       console.log('Generation started:', data);
       
@@ -93,7 +116,7 @@ const ImageGeneration = () => {
       
     } catch (error) {
       console.error('Generation error:', error);
-      toast.error('خطا در تولید تصویر');
+      toast.error(`خطا در تولید تصویر: ${error.message || 'خطای نامشخص'}`);
       setIsGenerating(false);
     }
   };
@@ -104,13 +127,18 @@ const ImageGeneration = () => {
     
     const poll = async () => {
       try {
+        console.log(`Status check attempt ${attempts + 1} for generation:`, generationId);
+        
         const { data, error } = await supabase.functions.invoke('comfyui-status', {
           body: { generation_id: generationId }
         });
 
-        if (error) throw error;
+        if (error) {
+          console.error('Status check error:', error);
+          throw error;
+        }
 
-        console.log('Status check:', data);
+        console.log('Status check result:', data);
 
         if (data.status === 'completed' && data.image_url) {
           setGeneratedImages(prev => [data, ...prev]);
@@ -121,7 +149,7 @@ const ImageGeneration = () => {
         }
 
         if (data.status === 'failed') {
-          toast.error('خطا در تولید تصویر');
+          toast.error(`خطا در تولید تصویر: ${data.error_message || 'خطای نامشخص'}`);
           setIsGenerating(false);
           setCurrentGenerationId(null);
           return;
@@ -139,6 +167,7 @@ const ImageGeneration = () => {
         
       } catch (error) {
         console.error('Status check error:', error);
+        toast.error(`خطا در بررسی وضعیت: ${error.message || 'خطای نامشخص'}`);
         setIsGenerating(false);
         setCurrentGenerationId(null);
       }
@@ -361,6 +390,14 @@ const ImageGeneration = () => {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Debug Info - Only show in development */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="absolute top-4 left-4 bg-gray-800 p-2 rounded text-xs text-gray-300">
+          <div>User: {currentUser ? 'Authenticated' : 'Not authenticated'}</div>
+          <div>Auth Method: {user ? 'Supabase' : phoneUser ? 'Phone' : 'None'}</div>
         </div>
       )}
 

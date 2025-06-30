@@ -28,31 +28,86 @@ serve(async (req) => {
   }
 
   try {
+    console.log('=== ComfyUI Generate Function Called ===')
+    console.log('Method:', req.method)
+    console.log('URL:', req.url)
+    
+    // Log all headers for debugging
+    const headers: { [key: string]: string } = {}
+    req.headers.forEach((value, key) => {
+      headers[key] = value
+    })
+    console.log('Request headers:', JSON.stringify(headers, null, 2))
+
+    // Check for authorization header
+    const authHeader = req.headers.get('Authorization')
+    console.log('Authorization header present:', !!authHeader)
+    console.log('Authorization header value:', authHeader ? authHeader.substring(0, 20) + '...' : 'null')
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       {
         global: {
-          headers: { Authorization: req.headers.get('Authorization')! },
+          headers: { Authorization: authHeader ?? '' },
         },
       }
     )
 
+    console.log('Supabase URL:', Deno.env.get('SUPABASE_URL')?.substring(0, 30) + '...')
+    console.log('Supabase Anon Key present:', !!Deno.env.get('SUPABASE_ANON_KEY'))
+
     // Get user from JWT token
+    console.log('Attempting to get user from token...')
     const {
       data: { user },
       error: userError,
     } = await supabaseClient.auth.getUser()
 
-    if (userError || !user) {
+    console.log('User retrieval result:', {
+      userExists: !!user,
+      userId: user?.id,
+      userEmail: user?.email,
+      error: userError?.message
+    })
+
+    if (userError) {
+      console.error('User authentication error:', userError)
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
+        JSON.stringify({ 
+          error: 'Authentication failed', 
+          details: userError.message,
+          debug: {
+            hasAuthHeader: !!authHeader,
+            supabaseUrlSet: !!Deno.env.get('SUPABASE_URL'),
+            supabaseKeySet: !!Deno.env.get('SUPABASE_ANON_KEY')
+          }
+        }),
         {
           status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
       )
     }
+
+    if (!user) {
+      console.error('No user found in token')
+      return new Response(
+        JSON.stringify({ 
+          error: 'User not authenticated',
+          debug: {
+            hasAuthHeader: !!authHeader,
+            authHeaderLength: authHeader?.length || 0
+          }
+        }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
+    }
+
+    console.log('User authenticated successfully:', user.id)
 
     const body: GenerationRequest = await req.json()
     const {
@@ -98,7 +153,7 @@ serve(async (req) => {
     if (insertError) {
       console.error('Database insert error:', insertError)
       return new Response(
-        JSON.stringify({ error: 'Failed to create generation record' }),
+        JSON.stringify({ error: 'Failed to create generation record', details: insertError.message }),
         {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -110,6 +165,7 @@ serve(async (req) => {
 
     // ComfyUI configuration - will be localhost for testing, then switched to GPU server
     const COMFYUI_URL = Deno.env.get('COMFYUI_URL') || 'http://127.0.0.1:8188'
+    console.log('ComfyUI URL:', COMFYUI_URL)
     
     // Basic workflow template for text-to-image generation
     const workflow: ComfyUIWorkflow = {
