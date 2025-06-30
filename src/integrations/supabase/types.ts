@@ -20,6 +20,7 @@ export type Database = {
           id: string
           image_url: string | null
           model_name: string | null
+          model_type: string | null
           negative_prompt: string | null
           prompt: string
           status: string | null
@@ -37,6 +38,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           model_name?: string | null
+          model_type?: string | null
           negative_prompt?: string | null
           prompt: string
           status?: string | null
@@ -54,6 +56,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           model_name?: string | null
+          model_type?: string | null
           negative_prompt?: string | null
           prompt?: string
           status?: string | null

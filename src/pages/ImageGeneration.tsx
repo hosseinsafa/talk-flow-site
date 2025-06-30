@@ -1,20 +1,25 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Slider } from '@/components/ui/slider';
 import { 
   Image, 
   Sparkles,
   Settings,
   Download,
-  History
+  History,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useKavenegarAuth } from '@/hooks/useKavenegarAuth';
 import { toast } from 'sonner';
+import { ModelSelector } from '@/components/ModelSelector';
 
 interface GenerationSettings {
   steps: number;
@@ -30,10 +35,12 @@ interface GeneratedImage {
   image_url: string;
   status: string;
   created_at: string;
+  model_type: string;
 }
 
 const ImageGeneration = () => {
   const [prompt, setPrompt] = useState('');
+  const [selectedModel, setSelectedModel] = useState('flux_schnell');
   const [isGenerating, setIsGenerating] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
@@ -44,35 +51,58 @@ const ImageGeneration = () => {
   const currentUser = phoneUser || user;
 
   const [settings, setSettings] = useState<GenerationSettings>({
-    steps: 20,
-    cfg_scale: 7.0,
-    width: 512,
-    height: 512,
+    steps: 4,
+    cfg_scale: 1.0,
+    width: 1024,
+    height: 1024,
     negative_prompt: ''
   });
 
-  // Enhanced session verification
+  // Update default settings based on selected model
   useEffect(() => {
-    const checkSession = async () => {
-      if (!user && !phoneUser) {
-        console.log('No authenticated user found');
-        return;
-      }
+    if (selectedModel === 'flux_schnell') {
+      setSettings(prev => ({
+        ...prev,
+        steps: 4,
+        cfg_scale: 1.0
+      }));
+    } else if (selectedModel === 'flux_dev') {
+      setSettings(prev => ({
+        ...prev,
+        steps: 50,
+        cfg_scale: 3.5
+      }));
+    }
+  }, [selectedModel]);
 
-      if (user) {
-        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
-        console.log('Session check:', {
-          hasUser: !!user,
-          hasSession: !!currentSession,
-          sessionError: error?.message,
-          accessToken: currentSession?.access_token ? 'present' : 'missing',
-          tokenExpiry: currentSession?.expires_at
-        });
+  // Load user's generation history
+  useEffect(() => {
+    const loadGenerationHistory = async () => {
+      if (!currentUser) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('image_generations')
+          .select('*')
+          .eq('user_id', currentUser.id)
+          .order('created_at', { ascending: false })
+          .limit(20);
+
+        if (error) {
+          console.error('Failed to load generation history:', error);
+          return;
+        }
+
+        if (data) {
+          setGeneratedImages(data);
+        }
+      } catch (error) {
+        console.error('Error loading generation history:', error);
       }
     };
 
-    checkSession();
-  }, [user, phoneUser]);
+    loadGenerationHistory();
+  }, [currentUser]);
 
   const refreshSessionIfNeeded = async () => {
     try {
@@ -122,6 +152,11 @@ const ImageGeneration = () => {
       toast.error('لطفاً وارد حساب کاربری خود شوید');
       return;
     }
+
+    if (selectedModel === 'comfyui_local') {
+      toast.error('مدل ComfyUI Local هنوز در دسترس نیست');
+      return;
+    }
     
     setIsGenerating(true);
     
@@ -138,14 +173,10 @@ const ImageGeneration = () => {
         return;
       }
 
-      console.log('Session validated successfully:', {
-        userId: validSession.user?.id,
-        tokenPresent: !!validSession.access_token,
-        expiresAt: validSession.expires_at
-      });
+      console.log('Session validated successfully');
 
-      // Call the edge function with fresh session token
-      const { data, error } = await supabase.functions.invoke('comfyui-generate', {
+      // Call the new Replicate generate function
+      const { data, error } = await supabase.functions.invoke('replicate-generate', {
         body: {
           prompt,
           negative_prompt: settings.negative_prompt,
@@ -153,6 +184,7 @@ const ImageGeneration = () => {
           cfg_scale: settings.cfg_scale,
           width: settings.width,
           height: settings.height,
+          model: selectedModel,
         },
         headers: {
           Authorization: `Bearer ${validSession.access_token}`,
@@ -164,8 +196,7 @@ const ImageGeneration = () => {
       if (error) {
         console.error('Function invoke error:', error);
         
-        // Handle specific authentication errors
-        if (error.message?.includes('Authentication') || error.message?.includes('401') || error.message?.includes('expired')) {
+        if (error.message?.includes('Authentication') || error.message?.includes('401')) {
           toast.error('جلسه کاربری منقضی شده - لطفاً دوباره وارد شوید');
         } else {
           toast.error(`خطا در تولید تصویر: ${error.message || 'خطای نامشخص'}`);
@@ -193,17 +224,16 @@ const ImageGeneration = () => {
   };
 
   const pollForResult = async (generationId: string) => {
-    const maxAttempts = 30; // 5 minutes max (10 seconds * 30)
+    const maxAttempts = 60; // 10 minutes max (10 seconds * 60)
     let attempts = 0;
     
     const poll = async () => {
       try {
         console.log(`Status check attempt ${attempts + 1} for generation:`, generationId);
         
-        // Ensure we have a valid session for status checks too
         const validSession = await refreshSessionIfNeeded();
         
-        const { data, error } = await supabase.functions.invoke('comfyui-status', {
+        const { data, error } = await supabase.functions.invoke('replicate-status', {
           body: { generation_id: generationId },
           headers: validSession?.access_token ? {
             Authorization: `Bearer ${validSession.access_token}`,
@@ -218,6 +248,7 @@ const ImageGeneration = () => {
         console.log('Status check result:', data);
 
         if (data.status === 'completed' && data.image_url) {
+          // Add to the beginning of the list
           setGeneratedImages(prev => [data, ...prev]);
           toast.success('تصویر با موفقیت تولید شد!');
           setIsGenerating(false);
@@ -270,6 +301,12 @@ const ImageGeneration = () => {
     setPrompt(newPrompt);
   };
 
+  const sizePresets = [
+    { label: 'مربع', width: 1024, height: 1024 },
+    { label: 'عمودی', width: 768, height: 1344 },
+    { label: 'افقی', width: 1344, height: 768 },
+  ];
+
   return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
       {/* Header */}
@@ -283,6 +320,11 @@ const ImageGeneration = () => {
       {/* Main Input Container */}
       <div className="w-full max-w-2xl">
         <div className="bg-gray-900 rounded-lg border border-gray-700 p-6 mb-4">
+          {/* Model Selector */}
+          <div className="mb-6">
+            <ModelSelector value={selectedModel} onValueChange={setSelectedModel} />
+          </div>
+
           <Textarea
             placeholder="تصویر مورد نظر خود را توصیف کنید..."
             value={prompt}
@@ -315,45 +357,41 @@ const ImageGeneration = () => {
             >
               <Settings className="w-4 h-4 mr-2" />
               تنظیمات پیشرفته
+              {showSettings ? <ChevronUp className="w-4 h-4 ml-2" /> : <ChevronDown className="w-4 h-4 ml-2" />}
             </Button>
           </div>
 
           {/* Advanced Settings */}
           {showSettings && (
             <div className="bg-gray-800 rounded-lg p-4 mb-4 space-y-4">
+              {/* Size Presets */}
+              <div>
+                <Label className="text-gray-300 text-sm mb-2 block">اندازه تصویر</Label>
+                <div className="flex gap-2 mb-3">
+                  {sizePresets.map((preset, index) => (
+                    <Button
+                      key={index}
+                      variant={settings.width === preset.width && settings.height === preset.height ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setSettings(prev => ({ ...prev, width: preset.width, height: preset.height }))}
+                      className="text-xs"
+                    >
+                      {preset.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-gray-300 text-sm">تعداد مراحل</Label>
-                  <Input
-                    type="number"
-                    value={settings.steps}
-                    onChange={(e) => setSettings(prev => ({ ...prev, steps: parseInt(e.target.value) || 20 }))}
-                    min="1"
-                    max="100"
-                    className="bg-gray-700 border-gray-600 text-white mt-1"
-                  />
-                </div>
-                <div>
-                  <Label className="text-gray-300 text-sm">CFG Scale</Label>
-                  <Input
-                    type="number"
-                    step="0.1"
-                    value={settings.cfg_scale}
-                    onChange={(e) => setSettings(prev => ({ ...prev, cfg_scale: parseFloat(e.target.value) || 7.0 }))}
-                    min="1"
-                    max="20"
-                    className="bg-gray-700 border-gray-600 text-white mt-1"
-                  />
-                </div>
                 <div>
                   <Label className="text-gray-300 text-sm">عرض</Label>
                   <Input
                     type="number"
                     value={settings.width}
-                    onChange={(e) => setSettings(prev => ({ ...prev, width: parseInt(e.target.value) || 512 }))}
+                    onChange={(e) => setSettings(prev => ({ ...prev, width: parseInt(e.target.value) || 1024 }))}
                     step="64"
                     min="256"
-                    max="1024"
+                    max="1536"
                     className="bg-gray-700 border-gray-600 text-white mt-1"
                   />
                 </div>
@@ -362,14 +400,48 @@ const ImageGeneration = () => {
                   <Input
                     type="number"
                     value={settings.height}
-                    onChange={(e) => setSettings(prev => ({ ...prev, height: parseInt(e.target.value) || 512 }))}
+                    onChange={(e) => setSettings(prev => ({ ...prev, height: parseInt(e.target.value) || 1024 }))}
                     step="64"
                     min="256"
-                    max="1024"
+                    max="1536"
                     className="bg-gray-700 border-gray-600 text-white mt-1"
                   />
                 </div>
               </div>
+
+              {selectedModel === 'flux_dev' && (
+                <>
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-gray-300 text-sm">تعداد مراحل</Label>
+                      <span className="text-gray-400 text-sm">{settings.steps}</span>
+                    </div>
+                    <Slider
+                      value={[settings.steps]}
+                      onValueChange={(value) => setSettings(prev => ({ ...prev, steps: value[0] }))}
+                      min={1}
+                      max={100}
+                      step={1}
+                      className="w-full"
+                    />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-gray-300 text-sm">CFG Scale</Label>
+                      <span className="text-gray-400 text-sm">{settings.cfg_scale}</span>
+                    </div>
+                    <Slider
+                      value={[settings.cfg_scale]}
+                      onValueChange={(value) => setSettings(prev => ({ ...prev, cfg_scale: value[0] }))}
+                      min={1}
+                      max={20}
+                      step={0.1}
+                      className="w-full"
+                    />
+                  </div>
+                </>
+              )}
+
               <div>
                 <Label className="text-gray-300 text-sm">پرامپت منفی</Label>
                 <Textarea
@@ -387,7 +459,7 @@ const ImageGeneration = () => {
           <div className="flex justify-end">
             <Button
               onClick={handleGenerate}
-              disabled={!prompt.trim() || isGenerating || !currentUser}
+              disabled={!prompt.trim() || isGenerating || !currentUser || selectedModel === 'comfyui_local'}
               className="bg-white text-black hover:bg-gray-200 px-6 py-2 rounded-md font-medium"
             >
               {isGenerating ? (
@@ -429,26 +501,31 @@ const ImageGeneration = () => {
                 </div>
                 <div className="p-4">
                   <p className="text-gray-300 text-sm line-clamp-2 mb-2">{image.prompt}</p>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between mb-2">
+                    <Badge variant="outline" className="text-xs">
+                      {image.model_type === 'flux_schnell' ? 'Flux Schnell' : 
+                       image.model_type === 'flux_dev' ? 'Flux Dev' : 'ComfyUI'}
+                    </Badge>
                     <span className="text-gray-500 text-xs">
                       {new Date(image.created_at).toLocaleDateString('fa-IR')}
                     </span>
-                    {image.image_url && (
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => {
-                          const link = document.createElement('a');
-                          link.href = image.image_url;
-                          link.download = `generated-image-${image.id}.png`;
-                          link.click();
-                        }}
-                        className="text-gray-400 hover:text-white"
-                      >
-                        <Download className="w-4 h-4" />
-                      </Button>
-                    )}
                   </div>
+                  {image.image_url && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => {
+                        const link = document.createElement('a');
+                        link.href = image.image_url;
+                        link.download = `generated-image-${image.id}.png`;
+                        link.click();
+                      }}
+                      className="text-gray-400 hover:text-white w-full"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      دانلود
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}
@@ -463,7 +540,9 @@ const ImageGeneration = () => {
             <div className="flex items-center justify-center">
               <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin mr-4"></div>
               <div className="text-white">
-                در حال تولید تصویر... این ممکن است چند دقیقه طول بکشد.
+                در حال تولید تصویر با {selectedModel === 'flux_schnell' ? 'Flux Schnell' : 'Flux Dev'}...
+                <br />
+                <span className="text-gray-400 text-sm">این ممکن است چند دقیقه طول بکشد.</span>
               </div>
             </div>
           </div>
@@ -476,14 +555,18 @@ const ImageGeneration = () => {
           <div>User: {currentUser ? 'Authenticated' : 'Not authenticated'}</div>
           <div>Auth Method: {user ? 'Supabase' : phoneUser ? 'Phone' : 'None'}</div>
           <div>Session: {session ? 'Active' : 'None'}</div>
+          <div>Model: {selectedModel}</div>
         </div>
       )}
 
       {/* Model Info */}
       <div className="absolute bottom-6 left-6">
         <div className="flex items-center text-gray-400 text-sm">
-          <span className="mr-2">مدل</span>
-          <span className="text-white">ComfyUI Local</span>
+          <span className="mr-2">مدل فعال</span>
+          <span className="text-white">
+            {selectedModel === 'flux_schnell' ? 'Flux Schnell' : 
+             selectedModel === 'flux_dev' ? 'Flux Dev' : 'ComfyUI Local'}
+          </span>
         </div>
       </div>
     </div>
