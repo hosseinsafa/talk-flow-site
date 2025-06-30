@@ -32,17 +32,39 @@ serve(async (req) => {
     console.log('Method:', req.method)
     console.log('URL:', req.url)
     
-    // Get all headers for debugging
+    // Get and validate authorization header
     const authHeader = req.headers.get('Authorization')
     const apiKeyHeader = req.headers.get('apikey')
-    const clientInfoHeader = req.headers.get('x-client-info')
     
-    console.log('Headers Debug:', {
+    console.log('Auth Headers Debug:', {
       hasAuthHeader: !!authHeader,
       authHeaderPrefix: authHeader ? authHeader.substring(0, 20) + '...' : 'none',
-      hasApiKey: !!apiKeyHeader,
-      clientInfo: clientInfoHeader,
-      authHeaderLength: authHeader?.length || 0
+      authHeaderLength: authHeader?.length || 0,
+      startsWithBearer: authHeader ? authHeader.startsWith('Bearer ') : false,
+      hasApiKey: !!apiKeyHeader
+    })
+
+    // Validate auth header format
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('Invalid or missing Authorization header')
+      return new Response(
+        JSON.stringify({ 
+          error: 'Authentication required',
+          message: 'Invalid or missing Authorization header',
+          details: 'Authorization header must be in format: Bearer <token>'
+        }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
+    }
+
+    // Extract JWT token
+    const jwtToken = authHeader.replace('Bearer ', '')
+    console.log('JWT Token extracted:', {
+      tokenLength: jwtToken.length,
+      tokenPrefix: jwtToken.substring(0, 20) + '...'
     })
 
     // Create Supabase client
@@ -62,11 +84,11 @@ serve(async (req) => {
 
     console.log('Creating Supabase client...')
     
-    // Create client with proper auth handling
+    // Create client with JWT token
     const supabaseClient = createClient(supabaseUrl, supabaseKey, {
       global: {
         headers: {
-          Authorization: authHeader || '',
+          Authorization: authHeader,
         },
       },
       auth: {
@@ -75,47 +97,49 @@ serve(async (req) => {
       }
     })
 
-    console.log('Attempting user authentication...')
+    console.log('Attempting to verify JWT and get user...')
     
-    // Try to get user with better error handling
+    // Try to verify JWT token and get user
     let user = null;
-    let userError = null;
+    let authError = null;
     
     try {
-      const { data: userData, error: authError } = await supabaseClient.auth.getUser()
+      // Use getUser() which validates the JWT token
+      const { data: userData, error } = await supabaseClient.auth.getUser(jwtToken)
       user = userData.user;
-      userError = authError;
+      authError = error;
       
-      console.log('Auth getUser result:', {
+      console.log('JWT Verification Result:', {
         userExists: !!user,
         userId: user?.id,
         userEmail: user?.email,
-        errorType: authError?.name,
-        errorMessage: authError?.message,
-        errorStatus: authError?.status
+        errorName: error?.name,
+        errorMessage: error?.message,
+        errorStatus: error?.status
       })
-    } catch (authException) {
-      console.error('Auth exception caught:', authException)
-      userError = authException;
+      
+    } catch (exception) {
+      console.error('JWT verification exception:', {
+        name: exception.name,
+        message: exception.message,
+        stack: exception.stack
+      })
+      authError = exception;
     }
 
-    if (userError || !user) {
-      console.error('Authentication failed:', {
-        error: userError,
-        hasAuthHeader: !!authHeader,
-        authHeaderLength: authHeader?.length || 0,
-        authHeaderStart: authHeader?.substring(0, 50) || 'none'
+    if (authError || !user) {
+      console.error('Authentication failed - JWT token invalid or expired:', {
+        errorType: authError?.name,
+        errorMessage: authError?.message,
+        tokenLength: jwtToken.length
       })
       
       return new Response(
         JSON.stringify({ 
-          error: 'Authentication required',
-          message: 'Please log in to use image generation',
-          details: userError?.message || 'No valid session found',
-          debug: {
-            hasAuthHeader: !!authHeader,
-            headerFormat: authHeader ? (authHeader.startsWith('Bearer ') ? 'correct' : 'incorrect') : 'missing'
-          }
+          error: 'Authentication failed',
+          message: 'Invalid or expired session token',
+          details: authError?.message || 'JWT token validation failed',
+          hint: 'Please log out and log back in to refresh your session'
         }),
         {
           status: 401,
@@ -124,7 +148,10 @@ serve(async (req) => {
       )
     }
 
-    console.log('User authenticated successfully:', user.id)
+    console.log('User authenticated successfully:', {
+      userId: user.id,
+      email: user.email
+    })
 
     const body: GenerationRequest = await req.json()
     const {

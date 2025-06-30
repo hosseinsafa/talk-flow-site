@@ -65,13 +65,52 @@ const ImageGeneration = () => {
           hasUser: !!user,
           hasSession: !!currentSession,
           sessionError: error?.message,
-          accessToken: currentSession?.access_token ? 'present' : 'missing'
+          accessToken: currentSession?.access_token ? 'present' : 'missing',
+          tokenExpiry: currentSession?.expires_at
         });
       }
     };
 
     checkSession();
   }, [user, phoneUser]);
+
+  const refreshSessionIfNeeded = async () => {
+    try {
+      const { data: { session: currentSession }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.error('Session check error:', error);
+        return null;
+      }
+
+      // Check if token is expired or will expire soon (within 5 minutes)
+      if (currentSession?.expires_at) {
+        const expiryTime = new Date(currentSession.expires_at * 1000);
+        const now = new Date();
+        const timeUntilExpiry = expiryTime.getTime() - now.getTime();
+        const fiveMinutes = 5 * 60 * 1000;
+
+        if (timeUntilExpiry < fiveMinutes) {
+          console.log('Token expires soon, refreshing...');
+          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+          
+          if (refreshError) {
+            console.error('Session refresh failed:', refreshError);
+            toast.error('جلسه کاربری منقضی شده - لطفاً دوباره وارد شوید');
+            return null;
+          }
+          
+          console.log('Session refreshed successfully');
+          return refreshData.session;
+        }
+      }
+
+      return currentSession;
+    } catch (error) {
+      console.error('Session refresh error:', error);
+      return null;
+    }
+  };
 
   const handleGenerate = async () => {
     if (!prompt.trim()) {
@@ -89,17 +128,10 @@ const ImageGeneration = () => {
     try {
       console.log('Starting image generation...');
       
-      // Enhanced session verification before making the request
-      const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
+      // Refresh session if needed before making the request
+      const validSession = await refreshSessionIfNeeded();
       
-      if (sessionError) {
-        console.error('Session error:', sessionError);
-        toast.error('خطا در احراز هویت - لطفاً دوباره وارد شوید');
-        setIsGenerating(false);
-        return;
-      }
-
-      if (!currentSession?.access_token) {
+      if (!validSession?.access_token) {
         console.error('No valid session or access token found');
         toast.error('جلسه کاربری منقضی شده است - لطفاً دوباره وارد شوید');
         setIsGenerating(false);
@@ -107,12 +139,12 @@ const ImageGeneration = () => {
       }
 
       console.log('Session validated successfully:', {
-        userId: currentSession.user?.id,
-        tokenPresent: !!currentSession.access_token,
-        expiresAt: currentSession.expires_at
+        userId: validSession.user?.id,
+        tokenPresent: !!validSession.access_token,
+        expiresAt: validSession.expires_at
       });
 
-      // Call the edge function with explicit session management
+      // Call the edge function with fresh session token
       const { data, error } = await supabase.functions.invoke('comfyui-generate', {
         body: {
           prompt,
@@ -123,7 +155,7 @@ const ImageGeneration = () => {
           height: settings.height,
         },
         headers: {
-          Authorization: `Bearer ${currentSession.access_token}`,
+          Authorization: `Bearer ${validSession.access_token}`,
         }
       });
 
@@ -133,8 +165,8 @@ const ImageGeneration = () => {
         console.error('Function invoke error:', error);
         
         // Handle specific authentication errors
-        if (error.message?.includes('Authentication') || error.message?.includes('401')) {
-          toast.error('خطا در احراز هویت - لطفاً دوباره وارد شوید');
+        if (error.message?.includes('Authentication') || error.message?.includes('401') || error.message?.includes('expired')) {
+          toast.error('جلسه کاربری منقضی شده - لطفاً دوباره وارد شوید');
         } else {
           toast.error(`خطا در تولید تصویر: ${error.message || 'خطای نامشخص'}`);
         }
@@ -169,12 +201,12 @@ const ImageGeneration = () => {
         console.log(`Status check attempt ${attempts + 1} for generation:`, generationId);
         
         // Ensure we have a valid session for status checks too
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        const validSession = await refreshSessionIfNeeded();
         
         const { data, error } = await supabase.functions.invoke('comfyui-status', {
           body: { generation_id: generationId },
-          headers: currentSession?.access_token ? {
-            Authorization: `Bearer ${currentSession.access_token}`,
+          headers: validSession?.access_token ? {
+            Authorization: `Bearer ${validSession.access_token}`,
           } : {}
         });
 
