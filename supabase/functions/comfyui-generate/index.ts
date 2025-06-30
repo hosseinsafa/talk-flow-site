@@ -32,73 +32,65 @@ serve(async (req) => {
     console.log('Method:', req.method)
     console.log('URL:', req.url)
     
-    // Log all headers for debugging
-    const headers: { [key: string]: string } = {}
-    req.headers.forEach((value, key) => {
-      headers[key] = value
-    })
-    console.log('Request headers:', JSON.stringify(headers, null, 2))
-
-    // Check for authorization header
+    // Enhanced header debugging
     const authHeader = req.headers.get('Authorization')
-    console.log('Authorization header present:', !!authHeader)
-    console.log('Authorization header value:', authHeader ? authHeader.substring(0, 20) + '...' : 'null')
-
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: authHeader ?? '' },
-        },
-      }
-    )
-
-    console.log('Supabase URL:', Deno.env.get('SUPABASE_URL')?.substring(0, 30) + '...')
-    console.log('Supabase Anon Key present:', !!Deno.env.get('SUPABASE_ANON_KEY'))
-
-    // Get user from JWT token
-    console.log('Attempting to get user from token...')
-    const {
-      data: { user },
-      error: userError,
-    } = await supabaseClient.auth.getUser()
-
-    console.log('User retrieval result:', {
-      userExists: !!user,
-      userId: user?.id,
-      userEmail: user?.email,
-      error: userError?.message
+    const apiKeyHeader = req.headers.get('apikey')
+    const clientInfoHeader = req.headers.get('x-client-info')
+    
+    console.log('Headers Debug:', {
+      hasAuthHeader: !!authHeader,
+      authHeaderPrefix: authHeader ? authHeader.substring(0, 20) + '...' : 'none',
+      hasApiKey: !!apiKeyHeader,
+      clientInfo: clientInfoHeader,
     })
 
-    if (userError) {
-      console.error('User authentication error:', userError)
+    // Create Supabase client with proper configuration
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')
+    
+    if (!supabaseUrl || !supabaseKey) {
+      console.error('Missing Supabase configuration')
       return new Response(
-        JSON.stringify({ 
-          error: 'Authentication failed', 
-          details: userError.message,
-          debug: {
-            hasAuthHeader: !!authHeader,
-            supabaseUrlSet: !!Deno.env.get('SUPABASE_URL'),
-            supabaseKeySet: !!Deno.env.get('SUPABASE_ANON_KEY')
-          }
-        }),
+        JSON.stringify({ error: 'Server configuration error' }),
         {
-          status: 401,
+          status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
       )
     }
 
-    if (!user) {
-      console.error('No user found in token')
+    const supabaseClient = createClient(supabaseUrl, supabaseKey, {
+      global: {
+        headers: { Authorization: authHeader ?? '' },
+      },
+    })
+
+    console.log('Attempting user authentication...')
+    
+    // Enhanced user authentication with better error handling
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
+
+    console.log('Authentication result:', {
+      userExists: !!user,
+      userId: user?.id,
+      userEmail: user?.email,
+      errorType: userError?.name,
+      errorMessage: userError?.message,
+      errorStatus: userError?.status
+    })
+
+    if (userError || !user) {
+      console.error('Authentication failed:', {
+        error: userError,
+        hasAuthHeader: !!authHeader,
+        authHeaderLength: authHeader?.length || 0
+      })
+      
       return new Response(
         JSON.stringify({ 
-          error: 'User not authenticated',
-          debug: {
-            hasAuthHeader: !!authHeader,
-            authHeaderLength: authHeader?.length || 0
-          }
+          error: 'Authentication required',
+          message: 'Please log in to use image generation',
+          details: userError?.message || 'No valid session found'
         }),
         {
           status: 401,
@@ -163,7 +155,7 @@ serve(async (req) => {
 
     console.log('Created generation record:', generationRecord.id)
 
-    // ComfyUI configuration - will be localhost for testing, then switched to GPU server
+    // ComfyUI configuration
     const COMFYUI_URL = Deno.env.get('COMFYUI_URL') || 'http://127.0.0.1:8188'
     console.log('ComfyUI URL:', COMFYUI_URL)
     
@@ -264,8 +256,6 @@ serve(async (req) => {
         })
         .eq('id', generationRecord.id)
 
-      // For now, we'll return the job ID and let the frontend poll for results
-      // In a real implementation, you might want to use WebSockets for real-time updates
       return new Response(
         JSON.stringify({ 
           success: true,

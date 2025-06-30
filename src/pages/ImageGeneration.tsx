@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -39,7 +39,7 @@ const ImageGeneration = () => {
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [currentGenerationId, setCurrentGenerationId] = useState<string | null>(null);
   
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const { user: phoneUser, isAuthenticated: isPhoneAuth } = useKavenegarAuth();
   const currentUser = phoneUser || user;
 
@@ -50,6 +50,28 @@ const ImageGeneration = () => {
     height: 512,
     negative_prompt: ''
   });
+
+  // Enhanced session verification
+  useEffect(() => {
+    const checkSession = async () => {
+      if (!user && !phoneUser) {
+        console.log('No authenticated user found');
+        return;
+      }
+
+      if (user) {
+        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
+        console.log('Session check:', {
+          hasUser: !!user,
+          hasSession: !!currentSession,
+          sessionError: error?.message,
+          accessToken: currentSession?.access_token ? 'present' : 'missing'
+        });
+      }
+    };
+
+    checkSession();
+  }, [user, phoneUser]);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) {
@@ -67,25 +89,30 @@ const ImageGeneration = () => {
     try {
       console.log('Starting image generation...');
       
-      // Get the current session to ensure we have a valid token
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      // Enhanced session verification before making the request
+      const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError) {
         console.error('Session error:', sessionError);
-        toast.error('خطا در احراز هویت');
+        toast.error('خطا در احراز هویت - لطفاً دوباره وارد شوید');
         setIsGenerating(false);
         return;
       }
 
-      if (!session) {
-        console.error('No active session found');
-        toast.error('جلسه کاربری منقضی شده است');
+      if (!currentSession?.access_token) {
+        console.error('No valid session or access token found');
+        toast.error('جلسه کاربری منقضی شده است - لطفاً دوباره وارد شوید');
         setIsGenerating(false);
         return;
       }
 
-      console.log('Session found, access token present:', !!session.access_token);
-      
+      console.log('Session validated successfully:', {
+        userId: currentSession.user?.id,
+        tokenPresent: !!currentSession.access_token,
+        expiresAt: currentSession.expires_at
+      });
+
+      // Call the edge function with explicit session management
       const { data, error } = await supabase.functions.invoke('comfyui-generate', {
         body: {
           prompt,
@@ -94,6 +121,9 @@ const ImageGeneration = () => {
           cfg_scale: settings.cfg_scale,
           width: settings.width,
           height: settings.height,
+        },
+        headers: {
+          Authorization: `Bearer ${currentSession.access_token}`,
         }
       });
 
@@ -101,7 +131,16 @@ const ImageGeneration = () => {
 
       if (error) {
         console.error('Function invoke error:', error);
-        throw error;
+        
+        // Handle specific authentication errors
+        if (error.message?.includes('Authentication') || error.message?.includes('401')) {
+          toast.error('خطا در احراز هویت - لطفاً دوباره وارد شوید');
+        } else {
+          toast.error(`خطا در تولید تصویر: ${error.message || 'خطای نامشخص'}`);
+        }
+        
+        setIsGenerating(false);
+        return;
       }
 
       console.log('Generation started:', data);
@@ -129,8 +168,14 @@ const ImageGeneration = () => {
       try {
         console.log(`Status check attempt ${attempts + 1} for generation:`, generationId);
         
+        // Ensure we have a valid session for status checks too
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        
         const { data, error } = await supabase.functions.invoke('comfyui-status', {
-          body: { generation_id: generationId }
+          body: { generation_id: generationId },
+          headers: currentSession?.access_token ? {
+            Authorization: `Bearer ${currentSession.access_token}`,
+          } : {}
         });
 
         if (error) {
@@ -398,6 +443,7 @@ const ImageGeneration = () => {
         <div className="absolute top-4 left-4 bg-gray-800 p-2 rounded text-xs text-gray-300">
           <div>User: {currentUser ? 'Authenticated' : 'Not authenticated'}</div>
           <div>Auth Method: {user ? 'Supabase' : phoneUser ? 'Phone' : 'None'}</div>
+          <div>Session: {session ? 'Active' : 'None'}</div>
         </div>
       )}
 
