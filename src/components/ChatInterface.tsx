@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Menu, ArrowUp, Plus, Mic } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -167,6 +166,77 @@ const ChatInterface = () => {
     }
   };
 
+  const isImageGenerationRequest = (text: string): boolean => {
+    const imageKeywords = [
+      // English keywords
+      'generate', 'create', 'make', 'draw', 'design', 'paint', 'sketch',
+      'image', 'picture', 'photo', 'illustration', 'artwork', 'visual',
+      // Persian keywords
+      'بساز', 'تصویر', 'عکس', 'نقاشی', 'طراحی', 'ایجاد'
+    ];
+    
+    const lowerText = text.toLowerCase();
+    return imageKeywords.some(keyword => lowerText.includes(keyword)) &&
+           (lowerText.includes('image') || lowerText.includes('picture') || 
+            lowerText.includes('تصویر') || lowerText.includes('عکس') ||
+            lowerText.includes('generate') || lowerText.includes('create') ||
+            lowerText.includes('بساز'));
+  };
+
+  const generateImage = async (prompt: string, sessionId: string) => {
+    try {
+      console.log('Starting image generation with prompt:', prompt);
+      
+      // Call the replicate-generate function
+      const { data, error } = await supabase.functions.invoke('replicate-generate', {
+        body: {
+          prompt: prompt,
+          model: 'flux_schnell' // Default to flux_schnell for speed
+        }
+      });
+
+      if (error) {
+        console.error('Error calling replicate-generate:', error);
+        throw new Error(error.message);
+      }
+
+      console.log('Generation started:', data);
+      const generationId = data.generation_id;
+
+      // Poll for completion
+      let attempts = 0;
+      const maxAttempts = 30; // 5 minute timeout
+      
+      while (attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
+        
+        const { data: statusData, error: statusError } = await supabase.functions.invoke('replicate-status', {
+          body: { generation_id: generationId }
+        });
+
+        if (statusError) {
+          console.error('Error checking status:', statusError);
+          throw new Error(statusError.message);
+        }
+
+        console.log('Status check:', statusData);
+
+        if (statusData.status === 'completed' && statusData.image_url) {
+          return statusData.image_url;
+        } else if (statusData.status === 'failed') {
+          throw new Error(statusData.error_message || 'Image generation failed');
+        }
+
+        attempts++;
+      }
+
+      throw new Error('Image generation timed out');
+    } catch (error) {
+      console.error('Error in generateImage:', error);
+      throw error;
+    }
+  };
+
   const startNewChat = () => {
     setMessages([]);
     setCurrentSessionId(null);
@@ -214,39 +284,94 @@ const ChatInterface = () => {
       // Save user message
       await saveMessage(sessionId, currentInput, 'user');
 
-      // Get AI response
-      const { data, error } = await supabase.functions.invoke('chat', {
-        body: {
-          messages: [
-            ...messages.map(msg => ({
-              role: msg.role,
-              content: msg.content
-            })),
-            { role: 'user', content: currentInput }
-          ],
-          model: selectedModel,
-          max_tokens: 1000,
-          temperature: 0.7
-        }
-      });
+      // Check if this is an image generation request
+      if (isImageGenerationRequest(currentInput)) {
+        console.log('Detected image generation request');
+        
+        // Add "Generating image..." message
+        const loadingMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          content: 'Generating image...',
+          role: 'assistant',
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, loadingMessage]);
 
-      if (error) {
-        throw new Error(error.message);
+        try {
+          // Generate image
+          const imageUrl = await generateImage(currentInput, sessionId);
+          
+          // Replace loading message with image
+          const imageMessage: Message = {
+            id: (Date.now() + 2).toString(),
+            content: `Generated image based on: "${currentInput}"`,
+            role: 'assistant',
+            timestamp: new Date(),
+            imageUrl: imageUrl
+          };
+
+          setMessages(prev => prev.map(msg => 
+            msg.id === loadingMessage.id ? imageMessage : msg
+          ));
+
+          // Save assistant message with image
+          await saveMessage(sessionId, imageMessage.content, 'assistant');
+          await updateUsageCount();
+
+        } catch (imageError) {
+          console.error('Image generation error:', imageError);
+          
+          // Replace loading message with error
+          const errorMessage: Message = {
+            id: (Date.now() + 2).toString(),
+            content: `Sorry, I couldn't generate the image. Error: ${imageError.message}`,
+            role: 'assistant',
+            timestamp: new Date()
+          };
+
+          setMessages(prev => prev.map(msg => 
+            msg.id === loadingMessage.id ? errorMessage : msg
+          ));
+
+          await saveMessage(sessionId, errorMessage.content, 'assistant');
+        }
+      } else {
+        // Normal text chat - use OpenAI
+        const { data, error } = await supabase.functions.invoke('chat', {
+          body: {
+            messages: [
+              ...messages.map(msg => ({
+                role: msg.role,
+                content: msg.content
+              })),
+              { role: 'user', content: currentInput }
+            ],
+            model: selectedModel,
+            max_tokens: 1000,
+            temperature: 0.7
+          }
+        });
+
+        if (error) {
+          throw new Error(error.message);
+        }
+
+        await updateUsageCount();
+
+        const assistantMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          content: data.choices[0]?.message?.content || 'Sorry, I could not generate a response.',
+          role: 'assistant',
+          timestamp: new Date()
+        };
+
+        setMessages(prev => [...prev, assistantMessage]);
+
+        // Save assistant message
+        await saveMessage(sessionId, assistantMessage.content, 'assistant');
       }
 
-      await updateUsageCount();
-
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: data.choices[0]?.message?.content || 'Sorry, I could not generate a response.',
-        role: 'assistant',
-        timestamp: new Date()
-      };
-
-      setMessages(prev => [...prev, assistantMessage]);
-
-      // Save assistant message and update session timestamp
-      await saveMessage(sessionId, assistantMessage.content, 'assistant');
+      // Update session timestamp
       await updateSessionTimestamp(sessionId);
       await loadChatSessions(); // Refresh sidebar to show updated timestamp
 
@@ -351,8 +476,8 @@ const ChatInterface = () => {
                     <p className="text-sm text-gray-400">about the solar system</p>
                   </div>
                   <div className="p-4 rounded-xl bg-[#2f2f2f] hover:bg-[#3f3f3f] transition-colors cursor-pointer">
-                    <h3 className="font-medium mb-2">Write code</h3>
-                    <p className="text-sm text-gray-400">for a simple calculator</p>
+                    <h3 className="font-medium mb-2">Generate an image</h3>
+                    <p className="text-sm text-gray-400">of a futuristic city</p>
                   </div>
                   <div className="p-4 rounded-xl bg-[#2f2f2f] hover:bg-[#3f3f3f] transition-colors cursor-pointer">
                     <h3 className="font-medium mb-2">Explain quantum physics</h3>
