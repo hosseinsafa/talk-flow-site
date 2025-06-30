@@ -9,6 +9,60 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      image_generations: {
+        Row: {
+          cfg_scale: number | null
+          comfyui_job_id: string | null
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          height: number | null
+          id: string
+          image_url: string | null
+          model_name: string | null
+          negative_prompt: string | null
+          prompt: string
+          status: string | null
+          steps: number | null
+          user_id: string
+          width: number | null
+        }
+        Insert: {
+          cfg_scale?: number | null
+          comfyui_job_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          height?: number | null
+          id?: string
+          image_url?: string | null
+          model_name?: string | null
+          negative_prompt?: string | null
+          prompt: string
+          status?: string | null
+          steps?: number | null
+          user_id: string
+          width?: number | null
+        }
+        Update: {
+          cfg_scale?: number | null
+          comfyui_job_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          height?: number | null
+          id?: string
+          image_url?: string | null
+          model_name?: string | null
+          negative_prompt?: string | null
+          prompt?: string
+          status?: string | null
+          steps?: number | null
+          user_id?: string
+          width?: number | null
+        }
+        Relationships: []
+      }
       otp_verifications: {
         Row: {
           attempts: number
