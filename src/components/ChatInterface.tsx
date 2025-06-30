@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Menu, ArrowUp, Plus, Mic } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -183,17 +184,49 @@ const ChatInterface = () => {
             lowerText.includes('بساز'));
   };
 
+  const enhanceImagePrompt = (originalPrompt: string): string => {
+    // Enhanced prompt engineering for DALL·E 3 to match ChatGPT quality
+    const qualityEnhancements = [
+      "high resolution",
+      "ultra realistic", 
+      "8K quality",
+      "cinematic lighting",
+      "professional photography",
+      "highly detailed",
+      "masterpiece"
+    ];
+    
+    // Check if the prompt already contains quality keywords to avoid redundancy
+    const lowerPrompt = originalPrompt.toLowerCase();
+    const hasQualityKeywords = qualityEnhancements.some(keyword => 
+      lowerPrompt.includes(keyword.toLowerCase())
+    );
+    
+    if (hasQualityKeywords) {
+      // If user already specified quality terms, use their prompt as-is
+      return originalPrompt;
+    }
+    
+    // Enhance the prompt with quality terms
+    const enhancement = "high resolution, ultra realistic, 8K quality, cinematic lighting, highly detailed";
+    return `${originalPrompt}, ${enhancement}`;
+  };
+
   const generateImage = async (prompt: string) => {
     try {
       console.log('Starting DALL·E 3 image generation with prompt:', prompt);
       
+      // Enhance the prompt for better quality
+      const enhancedPrompt = enhanceImagePrompt(prompt);
+      console.log('Enhanced prompt:', enhancedPrompt);
+      
       // Call the generate-image function (DALL·E 3 via OpenAI)
       const { data, error } = await supabase.functions.invoke('generate-image', {
         body: {
-          prompt: prompt,
+          prompt: enhancedPrompt,
           model: 'dall-e-3',
           size: '1024x1024',
-          quality: 'standard',
+          quality: 'hd', // Use HD quality for best results
           n: 1
         }
       });
@@ -206,7 +239,7 @@ const ChatInterface = () => {
       console.log('DALL·E 3 generation completed:', data);
       
       if (data.data && data.data[0] && data.data[0].url) {
-        // Save image generation to database
+        // Save image generation to database with original prompt
         await saveImageGeneration(prompt, data.data[0].url);
         return data.data[0].url;
       } else {
