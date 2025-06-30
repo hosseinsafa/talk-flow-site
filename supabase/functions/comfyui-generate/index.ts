@@ -32,7 +32,7 @@ serve(async (req) => {
     console.log('Method:', req.method)
     console.log('URL:', req.url)
     
-    // Enhanced header debugging
+    // Get all headers for debugging
     const authHeader = req.headers.get('Authorization')
     const apiKeyHeader = req.headers.get('apikey')
     const clientInfoHeader = req.headers.get('x-client-info')
@@ -42,9 +42,10 @@ serve(async (req) => {
       authHeaderPrefix: authHeader ? authHeader.substring(0, 20) + '...' : 'none',
       hasApiKey: !!apiKeyHeader,
       clientInfo: clientInfoHeader,
+      authHeaderLength: authHeader?.length || 0
     })
 
-    // Create Supabase client with proper configuration
+    // Create Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
     const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')
     
@@ -59,38 +60,62 @@ serve(async (req) => {
       )
     }
 
+    console.log('Creating Supabase client...')
+    
+    // Create client with proper auth handling
     const supabaseClient = createClient(supabaseUrl, supabaseKey, {
       global: {
-        headers: { Authorization: authHeader ?? '' },
+        headers: {
+          Authorization: authHeader || '',
+        },
       },
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      }
     })
 
     console.log('Attempting user authentication...')
     
-    // Enhanced user authentication with better error handling
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
-
-    console.log('Authentication result:', {
-      userExists: !!user,
-      userId: user?.id,
-      userEmail: user?.email,
-      errorType: userError?.name,
-      errorMessage: userError?.message,
-      errorStatus: userError?.status
-    })
+    // Try to get user with better error handling
+    let user = null;
+    let userError = null;
+    
+    try {
+      const { data: userData, error: authError } = await supabaseClient.auth.getUser()
+      user = userData.user;
+      userError = authError;
+      
+      console.log('Auth getUser result:', {
+        userExists: !!user,
+        userId: user?.id,
+        userEmail: user?.email,
+        errorType: authError?.name,
+        errorMessage: authError?.message,
+        errorStatus: authError?.status
+      })
+    } catch (authException) {
+      console.error('Auth exception caught:', authException)
+      userError = authException;
+    }
 
     if (userError || !user) {
       console.error('Authentication failed:', {
         error: userError,
         hasAuthHeader: !!authHeader,
-        authHeaderLength: authHeader?.length || 0
+        authHeaderLength: authHeader?.length || 0,
+        authHeaderStart: authHeader?.substring(0, 50) || 'none'
       })
       
       return new Response(
         JSON.stringify({ 
           error: 'Authentication required',
           message: 'Please log in to use image generation',
-          details: userError?.message || 'No valid session found'
+          details: userError?.message || 'No valid session found',
+          debug: {
+            hasAuthHeader: !!authHeader,
+            headerFormat: authHeader ? (authHeader.startsWith('Bearer ') ? 'correct' : 'incorrect') : 'missing'
+          }
         }),
         {
           status: 401,
