@@ -183,57 +183,60 @@ const ChatInterface = () => {
             lowerText.includes('بساز'));
   };
 
-  const generateImage = async (prompt: string, sessionId: string) => {
+  const generateImage = async (prompt: string) => {
     try {
-      console.log('Starting image generation with prompt:', prompt);
+      console.log('Starting DALL·E 3 image generation with prompt:', prompt);
       
-      // Call the replicate-generate function
-      const { data, error } = await supabase.functions.invoke('replicate-generate', {
+      // Call the generate-image function (DALL·E 3 via OpenAI)
+      const { data, error } = await supabase.functions.invoke('generate-image', {
         body: {
           prompt: prompt,
-          model: 'flux_schnell' // Default to flux_schnell for speed
+          model: 'dall-e-3',
+          size: '1024x1024',
+          quality: 'standard',
+          n: 1
         }
       });
 
       if (error) {
-        console.error('Error calling replicate-generate:', error);
+        console.error('Error calling generate-image:', error);
         throw new Error(error.message);
       }
 
-      console.log('Generation started:', data);
-      const generationId = data.generation_id;
-
-      // Poll for completion
-      let attempts = 0;
-      const maxAttempts = 30; // 5 minute timeout
+      console.log('DALL·E 3 generation completed:', data);
       
-      while (attempts < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
-        
-        const { data: statusData, error: statusError } = await supabase.functions.invoke('replicate-status', {
-          body: { generation_id: generationId }
-        });
-
-        if (statusError) {
-          console.error('Error checking status:', statusError);
-          throw new Error(statusError.message);
-        }
-
-        console.log('Status check:', statusData);
-
-        if (statusData.status === 'completed' && statusData.image_url) {
-          return statusData.image_url;
-        } else if (statusData.status === 'failed') {
-          throw new Error(statusData.error_message || 'Image generation failed');
-        }
-
-        attempts++;
+      if (data.data && data.data[0] && data.data[0].url) {
+        // Save image generation to database
+        await saveImageGeneration(prompt, data.data[0].url);
+        return data.data[0].url;
+      } else {
+        throw new Error('No image URL returned from DALL·E 3');
       }
-
-      throw new Error('Image generation timed out');
     } catch (error) {
       console.error('Error in generateImage:', error);
       throw error;
+    }
+  };
+
+  const saveImageGeneration = async (prompt: string, imageUrl: string) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('image_generations')
+        .insert({
+          user_id: user.id,
+          prompt: prompt,
+          image_url: imageUrl,
+          model_type: 'dall-e-3',
+          status: 'completed'
+        });
+
+      if (error) {
+        console.error('Error saving image generation:', error);
+      }
+    } catch (error) {
+      console.error('Error saving image generation:', error);
     }
   };
 
@@ -298,8 +301,8 @@ const ChatInterface = () => {
         setMessages(prev => [...prev, loadingMessage]);
 
         try {
-          // Generate image
-          const imageUrl = await generateImage(currentInput, sessionId);
+          // Generate image using DALL·E 3
+          const imageUrl = await generateImage(currentInput);
           
           // Replace loading message with image
           const imageMessage: Message = {
