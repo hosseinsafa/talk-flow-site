@@ -1,6 +1,5 @@
 
 import React from 'react';
-import { User, Bot } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -27,24 +26,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
   const hasPersianText = containsPersian(message.content);
   
   return (
-    <div className={`group w-full ${isUser ? 'bg-transparent' : 'bg-[#2f2f2f]'} animate-fade-in`}>
+    <div className="group w-full bg-[#2f2f2f] animate-fade-in">
       <div className="max-w-4xl mx-auto px-6 py-6 flex gap-6">
-        {/* Avatar */}
-        <div className="flex-shrink-0">
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-            isUser 
-              ? 'bg-[#19c37d] text-white' 
-              : 'bg-[#19c37d] text-white'
-          }`}>
-            {isUser ? (
-              <User className="w-4 h-4" />
-            ) : (
-              <Bot className="w-4 h-4" />
-            )}
-          </div>
-        </div>
-
-        {/* Content */}
+        {/* Content - No avatar icons */}
         <div className="flex-1 min-w-0">
           <div 
             className="text-white leading-relaxed"

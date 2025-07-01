@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Plus, MessageSquare, X, Search, Library, Code, Video, Zap, FolderPlus, Sparkles } from 'lucide-react';
+import { Plus, MessageSquare, X, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -65,17 +65,6 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
   const groupedSessions = groupSessionsByDate(sessions);
   const groupOrder = ['Today', 'Yesterday', 'Previous 7 days', 'Older'];
 
-  const navigationItems = [
-    { icon: Plus, label: 'New Chat', action: onNewChat, highlight: true },
-    { icon: Search, label: 'Search Chats', action: () => {} },
-    { icon: Library, label: 'Library', action: () => {} },
-    { icon: Code, label: 'Codex', action: () => {} },
-    { icon: Video, label: 'Sora', action: () => {} },
-    { icon: Sparkles, label: 'GPTs', action: () => {} },
-    { icon: FolderPlus, label: 'New Project', action: () => {} },
-    { icon: Zap, label: 'Ai', action: () => {} },
-  ];
-
   return (
     <>
       {/* Mobile overlay */}
@@ -110,23 +99,24 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
             </Button>
           </div>
 
-          {/* Navigation Items */}
+          {/* Navigation Items - Only New Chat and Search */}
           <div className="p-3 space-y-1">
-            {navigationItems.map((item, index) => (
-              <Button
-                key={index}
-                onClick={item.action}
-                variant="ghost"
-                className={`w-full justify-start gap-3 h-10 text-sm font-medium transition-all hover:scale-105 ${
-                  item.highlight 
-                    ? 'bg-white/10 text-white hover:bg-white/20' 
-                    : 'text-gray-300 hover:text-white hover:bg-white/10'
-                }`}
-              >
-                <item.icon className="w-4 h-4" />
-                {item.label}
-              </Button>
-            ))}
+            <Button
+              onClick={onNewChat}
+              variant="ghost"
+              className="w-full justify-start gap-3 h-10 text-sm font-medium transition-all hover:scale-105 bg-white/10 text-white hover:bg-white/20"
+            >
+              <Plus className="w-4 h-4" />
+              New Chat
+            </Button>
+            <Button
+              onClick={() => {}}
+              variant="ghost"
+              className="w-full justify-start gap-3 h-10 text-sm font-medium text-gray-300 hover:text-white hover:bg-white/10"
+            >
+              <Search className="w-4 h-4" />
+              Search Chats
+            </Button>
           </div>
 
           {/* Chat Sessions List */}

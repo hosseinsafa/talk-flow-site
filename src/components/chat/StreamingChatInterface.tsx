@@ -1,6 +1,5 @@
-
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Menu, ArrowUp, Plus, Mic } from 'lucide-react';
+import { Send, Menu, ArrowUp, Mic } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -559,7 +558,7 @@ const StreamingChatInterface = () => {
           </div>
           
           <div className="flex items-center gap-3">
-            {/* Model Selector */}
+            {/* Model Selector - No Plus Button */}
             <Select value={selectedModel} onValueChange={setSelectedModel}>
               <SelectTrigger className="w-36 h-9 text-sm border-white/20 bg-[#2f2f2f] text-white">
                 <SelectValue />
@@ -570,15 +569,6 @@ const StreamingChatInterface = () => {
                 <SelectItem value="gpt-3.5-turbo">GPT-3.5</SelectItem>
               </SelectContent>
             </Select>
-
-            <Button
-              onClick={startNewChat}
-              variant="ghost"
-              size="icon"
-              className="text-gray-400 hover:text-white hover:bg-white/10 h-10 w-10"
-            >
-              <Plus className="w-5 h-5" />
-            </Button>
           </div>
         </div>
 
