@@ -17,14 +17,14 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, model = 'gpt-4o', system_prompt, max_tokens = 2000, temperature = 0.7 } = await req.json();
+    const { messages, model = 'gpt-4o', max_tokens = 2000, temperature = 0.7 } = await req.json();
 
-    console.log('Streaming chat request:', { model, messages: messages.length, system_prompt });
+    console.log('Streaming chat request:', { model, messages: messages.length });
 
-    // Prepare messages with system prompt
+    // Default system prompt for friendly, conversational tone
     const systemMessage = {
       role: 'system',
-      content: system_prompt || 'You are a helpful assistant. Respond naturally and conversationally.'
+      content: 'You are ChatGPT, a helpful AI assistant created by OpenAI. Respond in a friendly, clear, and conversational tone. Be helpful, accurate, and engaging while maintaining a natural conversation flow.'
     };
 
     const allMessages = [systemMessage, ...messages];

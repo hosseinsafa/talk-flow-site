@@ -1,9 +1,9 @@
+
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Menu, ArrowUp, Plus, Mic, ChevronDown } from 'lucide-react';
+import { Send, Menu, ArrowUp, Plus, Mic } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import ChatMessage from './ChatMessage';
 import ChatSidebar from './ChatSidebar';
 import TypingIndicator from './TypingIndicator';
@@ -27,14 +27,11 @@ interface ChatSession {
   updated_at: string;
 }
 
-type ToneType = 'formal' | 'friendly' | 'creative';
-
 const StreamingChatInterface = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedModel, setSelectedModel] = useState('gpt-4o');
-  const [selectedTone, setSelectedTone] = useState<ToneType>('friendly');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -59,18 +56,6 @@ const StreamingChatInterface = () => {
       loadChatSessions();
     }
   }, [user]);
-
-  const getToneSystemPrompt = (tone: ToneType): string => {
-    switch (tone) {
-      case 'formal':
-        return 'You are a professional and knowledgeable assistant. Respond with formal language, precise terminology, and structured answers. Maintain a courteous and respectful tone throughout the conversation.';
-      case 'creative':
-        return 'You are a creative and imaginative assistant. Feel free to use metaphors, analogies, and creative expressions. Think outside the box and provide innovative perspectives while being helpful and engaging.';
-      case 'friendly':
-      default:
-        return 'You are a friendly and helpful assistant. Respond in a warm, conversational tone while being informative and supportive. Feel free to use casual language and show personality in your responses.';
-    }
-  };
 
   const loadChatSessions = async () => {
     if (!user) return;
@@ -205,6 +190,28 @@ const StreamingChatInterface = () => {
     try {
       abortControllerRef.current = new AbortController();
       
+      console.log('Starting streaming chat request...');
+      
+      const { data, error } = await supabase.functions.invoke('streaming-chat', {
+        body: {
+          messages: messages.map(msg => ({
+            role: msg.role,
+            content: msg.content
+          })),
+          model: selectedModel,
+          max_tokens: 2000,
+          temperature: 0.7
+        }
+      });
+
+      if (error) {
+        console.error('Error from streaming-chat function:', error);
+        throw new Error(`Streaming error: ${error.message}`);
+      }
+
+      console.log('Streaming chat response received:', data);
+      
+      // For the streaming implementation, we'll use a direct fetch to handle the stream
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/streaming-chat`, {
         method: 'POST',
         headers: {
@@ -217,7 +224,6 @@ const StreamingChatInterface = () => {
             content: msg.content
           })),
           model: selectedModel,
-          system_prompt: getToneSystemPrompt(selectedTone),
           max_tokens: 2000,
           temperature: 0.7
         }),
@@ -279,6 +285,7 @@ const StreamingChatInterface = () => {
                 ));
               }
             } catch (parseError) {
+              // Some chunks may not be valid JSON, which is expected
               console.log('Parse error (expected for some chunks):', parseError);
             }
           }
@@ -317,7 +324,7 @@ const StreamingChatInterface = () => {
 
   const generateImage = async (prompt: string) => {
     try {
-      console.log('Starting DALL·E 3 image generation with original prompt:', prompt);
+      console.log('Starting DALL·E 3 image generation with prompt:', prompt);
       
       const { data, error } = await supabase.functions.invoke('generate-image', {
         body: {
@@ -523,12 +530,6 @@ const StreamingChatInterface = () => {
     return user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'there';
   };
 
-  const toneOptions = [
-    { value: 'friendly', label: 'Friendly', description: 'Warm and conversational' },
-    { value: 'formal', label: 'Formal', description: 'Professional and precise' },
-    { value: 'creative', label: 'Creative', description: 'Imaginative and innovative' }
-  ];
-
   return (
     <div className="flex h-screen bg-[#212121] text-white">
       {/* Sidebar */}
@@ -558,37 +559,6 @@ const StreamingChatInterface = () => {
           </div>
           
           <div className="flex items-center gap-3">
-            {/* Tone Selector */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="h-9 px-3 text-sm border border-white/20 bg-[#2f2f2f] text-white hover:bg-white/10"
-                >
-                  {toneOptions.find(t => t.value === selectedTone)?.label}
-                  <ChevronDown className="w-4 h-4 ml-2" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-64 p-2 bg-[#2f2f2f] border-white/20 text-white">
-                <div className="space-y-1">
-                  {toneOptions.map((tone) => (
-                    <button
-                      key={tone.value}
-                      onClick={() => setSelectedTone(tone.value as ToneType)}
-                      className={`w-full text-left p-3 rounded-lg transition-colors ${
-                        selectedTone === tone.value
-                          ? 'bg-white/10 text-white'
-                          : 'text-gray-300 hover:bg-white/5 hover:text-white'
-                      }`}
-                    >
-                      <div className="font-medium">{tone.label}</div>
-                      <div className="text-xs text-gray-400">{tone.description}</div>
-                    </button>
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
-
             {/* Model Selector */}
             <Select value={selectedModel} onValueChange={setSelectedModel}>
               <SelectTrigger className="w-36 h-9 text-sm border-white/20 bg-[#2f2f2f] text-white">
@@ -627,7 +597,7 @@ const StreamingChatInterface = () => {
                     <h3 className="font-medium mb-2">Generate an image</h3>
                     <p className="text-sm text-gray-400">of a futuristic city</p>
                   </div>
-                  <div className="p-4 rounded-xl bg-[#2f2f2f] hover:bg-[#3f3f3f] transition-colors cursor-pointer">
+                  <div className="p-4 rounded-xl bg-[#2f2f2f] hover:bg-[#3f3f2f] transition-colors cursor-pointer">
                     <h3 className="font-medium mb-2">Explain quantum physics</h3>
                     <p className="text-sm text-gray-400">in simple terms</p>
                   </div>
