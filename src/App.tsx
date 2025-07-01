@@ -9,6 +9,7 @@ import Navigation from "./components/Navigation";
 import Index from "./pages/Index";
 import Home from "./pages/Home";
 import Chat from "./pages/Chat";
+import FullScreenChat from "./pages/FullScreenChat";
 import ImageGeneration from "./pages/ImageGeneration";
 import VideoGeneration from "./pages/VideoGeneration";
 import Enhance from "./pages/Enhance";
@@ -27,52 +28,84 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <div className="min-h-screen bg-black">
-            <Navigation />
-            <main className="pt-16">
-              <Routes>
-                <Route path="/auth" element={<Auth />} />
-                <Route path="/" element={<Home />} />
-                <Route path="/chat" element={
-                  <ProtectedRoute>
-                    <Chat />
-                  </ProtectedRoute>
-                } />
-                <Route path="/image" element={
-                  <ProtectedRoute>
+          <Routes>
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/" element={
+              <div className="min-h-screen bg-black">
+                <Navigation />
+                <main className="pt-16">
+                  <Home />
+                </main>
+              </div>
+            } />
+            <Route path="/chat" element={
+              <ProtectedRoute>
+                <FullScreenChat />
+              </ProtectedRoute>
+            } />
+            <Route path="/image" element={
+              <ProtectedRoute>
+                <div className="min-h-screen bg-black">
+                  <Navigation />
+                  <main className="pt-16">
                     <ImageGeneration />
-                  </ProtectedRoute>
-                } />
-                <Route path="/video" element={
-                  <ProtectedRoute>
+                  </main>
+                </div>
+              </ProtectedRoute>
+            } />
+            <Route path="/video" element={
+              <ProtectedRoute>
+                <div className="min-h-screen bg-black">
+                  <Navigation />
+                  <main className="pt-16">
                     <VideoGeneration />
-                  </ProtectedRoute>
-                } />
-                <Route path="/enhance" element={
-                  <ProtectedRoute>
+                  </main>
+                </div>
+              </ProtectedRoute>
+            } />
+            <Route path="/enhance" element={
+              <ProtectedRoute>
+                <div className="min-h-screen bg-black">
+                  <Navigation />
+                  <main className="pt-16">
                     <Enhance />
-                  </ProtectedRoute>
-                } />
-                <Route path="/account" element={
-                  <ProtectedRoute>
+                  </main>
+                </div>
+              </ProtectedRoute>
+            } />
+            <Route path="/account" element={
+              <ProtectedRoute>
+                <div className="min-h-screen bg-black">
+                  <Navigation />
+                  <main className="pt-16">
                     <Account />
-                  </ProtectedRoute>
-                } />
-                <Route path="/payment" element={
-                  <ProtectedRoute>
+                  </main>
+                </div>
+              </ProtectedRoute>
+            } />
+            <Route path="/payment" element={
+              <ProtectedRoute>
+                <div className="min-h-screen bg-black">
+                  <Navigation />
+                  <main className="pt-16">
                     <Payment />
-                  </ProtectedRoute>
-                } />
-                {/* Legacy route redirect */}
-                <Route path="/index" element={
-                  <ProtectedRoute>
+                  </main>
+                </div>
+              </ProtectedRoute>
+            } />
+            {/* Legacy route redirect */}
+            <Route path="/index" element={
+              <ProtectedRoute>
+                <div className="min-h-screen bg-black">
+                  <Navigation />
+                  <main className="pt-16">
                     <Index />
-                  </ProtectedRoute>
-                } />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </main>
-          </div>
+                  </main>
+                </div>
+              </ProtectedRoute>
+            } />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
