@@ -19,9 +19,10 @@ serve(async (req) => {
   try {
     const { messages, model = 'gpt-4o', max_tokens = 2000, temperature = 0.7 } = await req.json();
 
-    console.log('Streaming chat request:', { model, messages: messages?.length });
+    console.log('Streaming chat request:', { model, messages_count: messages?.length });
 
     if (!openAIApiKey) {
+      console.error('OpenAI API key not configured');
       throw new Error('OpenAI API key not configured');
     }
 
@@ -32,6 +33,8 @@ serve(async (req) => {
     };
 
     const allMessages = [systemMessage, ...messages];
+
+    console.log('Making request to OpenAI with messages:', allMessages.length);
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -49,10 +52,12 @@ serve(async (req) => {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      console.error('OpenAI API error:', error);
-      throw new Error(`OpenAI API error: ${response.status} ${error}`);
+      const errorText = await response.text();
+      console.error('OpenAI API error:', response.status, errorText);
+      throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
     }
+
+    console.log('OpenAI response received, starting stream processing');
 
     // Create a readable stream for the response
     const encoder = new TextEncoder();
@@ -62,6 +67,7 @@ serve(async (req) => {
       async start(controller) {
         const reader = response.body?.getReader();
         if (!reader) {
+          console.error('No reader available from response body');
           controller.close();
           return;
         }
@@ -71,14 +77,17 @@ serve(async (req) => {
             const { done, value } = await reader.read();
             
             if (done) {
-              // Send final done message
+              console.log('Stream reading completed');
               controller.enqueue(encoder.encode('data: [DONE]\n\n'));
               controller.close();
               break;
             }
 
-            // Forward the chunk as-is
+            // Decode the chunk and log it
             const chunk = decoder.decode(value, { stream: true });
+            console.log('Raw chunk received:', chunk.substring(0, 100) + '...');
+            
+            // Forward the chunk as-is
             controller.enqueue(encoder.encode(chunk));
           }
         } catch (error) {

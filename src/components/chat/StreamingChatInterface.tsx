@@ -246,7 +246,6 @@ const StreamingChatInterface = () => {
       
       console.log('Starting streaming chat request...');
       
-      // Use direct fetch for streaming
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/streaming-chat`, {
         method: 'POST',
         headers: {
@@ -267,9 +266,11 @@ const StreamingChatInterface = () => {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Streaming response error:', errorText);
-        throw new Error(`HTTP error! status: ${response.status}`);
+        console.error('Streaming response error:', response.status, errorText);
+        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
       }
+
+      console.log('Response received, starting stream processing');
 
       const reader = response.body?.getReader();
       if (!reader) {
@@ -296,15 +297,26 @@ const StreamingChatInterface = () => {
         while (true) {
           const { done, value } = await reader.read();
           
-          if (done) break;
+          if (done) {
+            console.log('Stream reading completed');
+            break;
+          }
 
           const chunk = decoder.decode(value, { stream: true });
+          console.log('Received chunk:', chunk.substring(0, 100) + '...');
+          
+          // Split chunk by lines and process each line
           const lines = chunk.split('\n');
 
           for (const line of lines) {
+            if (line.trim() === '') continue;
+            
             if (line.startsWith('data: ')) {
               const data = line.slice(6).trim();
+              console.log('Processing data line:', data);
+              
               if (data === '[DONE]') {
+                console.log('Stream completed with [DONE]');
                 break;
               }
 
@@ -313,9 +325,10 @@ const StreamingChatInterface = () => {
                 const content = parsed.choices?.[0]?.delta?.content;
                 
                 if (content) {
+                  console.log('Adding content to stream:', content);
                   accumulatedContent += content;
                   
-                  // Update the streaming message
+                  // Update the streaming message with accumulated content
                   setMessages(prev => prev.map(msg => 
                     msg.id === streamingId 
                       ? { ...msg, content: accumulatedContent }
@@ -323,8 +336,7 @@ const StreamingChatInterface = () => {
                   ));
                 }
               } catch (parseError) {
-                // Some chunks may not be valid JSON, which is expected
-                console.log('Parse error (expected for some chunks):', parseError);
+                console.log('Parse error for chunk (expected for some chunks):', parseError);
               }
             }
           }
@@ -332,6 +344,8 @@ const StreamingChatInterface = () => {
       } catch (streamError) {
         console.error('Stream reading error:', streamError);
       }
+
+      console.log('Final accumulated content:', accumulatedContent);
 
       // Finalize the streaming message
       setMessages(prev => prev.map(msg => 
@@ -342,10 +356,13 @@ const StreamingChatInterface = () => {
 
       setStreamingMessageId(null);
 
-      // Save the complete message
-      if (accumulatedContent) {
+      // Save the complete message if there's content
+      if (accumulatedContent.trim()) {
+        console.log('Saving message to database:', accumulatedContent);
         await saveMessage(sessionId, accumulatedContent, 'assistant');
         await updateUsageCount();
+      } else {
+        console.warn('No content accumulated from stream');
       }
 
       return accumulatedContent;
@@ -470,6 +487,7 @@ const StreamingChatInterface = () => {
         }
       } else {
         // Stream text response
+        console.log('Starting text response streaming');
         await streamChatResponse([...messages, userMessage], sessionId);
       }
 
@@ -477,10 +495,10 @@ const StreamingChatInterface = () => {
       await loadChatSessions();
 
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error in sendMessage:', error);
       toast({
-        title: "Error",
-        description: "Failed to send message. Please try again.",
+        title: "خطا",
+        description: "ارسال پیام با مشکل مواجه شد. لطفاً دوباره تلاش کنید.",
         variant: "destructive"
       });
     } finally {
