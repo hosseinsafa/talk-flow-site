@@ -279,7 +279,9 @@ const StreamingChatInterface = () => {
 
       const decoder = new TextDecoder();
       let accumulatedContent = '';
-      const streamingId = Date.now().toString();
+      const streamingId = `streaming_${Date.now()}`;
+      
+      console.log('Created streaming message with ID:', streamingId);
       setStreamingMessageId(streamingId);
 
       // Add initial streaming message
@@ -291,7 +293,10 @@ const StreamingChatInterface = () => {
         isStreaming: true
       };
 
-      setMessages(prev => [...prev, initialMessage]);
+      setMessages(prev => {
+        console.log('Adding initial streaming message to state');
+        return [...prev, initialMessage];
+      });
 
       try {
         while (true) {
@@ -331,7 +336,11 @@ const StreamingChatInterface = () => {
                   // Update the streaming message with accumulated content
                   setMessages(prev => prev.map(msg => 
                     msg.id === streamingId 
-                      ? { ...msg, content: accumulatedContent }
+                      ? { 
+                          ...msg, 
+                          content: accumulatedContent,
+                          isStreaming: true 
+                        }
                       : msg
                   ));
                 }
@@ -343,17 +352,33 @@ const StreamingChatInterface = () => {
         }
       } catch (streamError) {
         console.error('Stream reading error:', streamError);
+        if (streamError.name !== 'AbortError') {
+          throw streamError;
+        }
       }
 
       console.log('Final accumulated content:', accumulatedContent);
 
-      // Finalize the streaming message
-      setMessages(prev => prev.map(msg => 
-        msg.id === streamingId 
-          ? { ...msg, isStreaming: false }
-          : msg
-      ));
+      // Create the final message with a new stable ID
+      const finalMessageId = `msg_${Date.now()}`;
+      const finalMessage: Message = {
+        id: finalMessageId,
+        content: accumulatedContent.trim() || 'Sorry, I couldn\'t generate a response.',
+        role: 'assistant',
+        timestamp: new Date(),
+        isStreaming: false
+      };
 
+      console.log('Creating final message with ID:', finalMessageId);
+
+      // Replace the streaming message with the final message
+      setMessages(prev => {
+        const withoutStreaming = prev.filter(msg => msg.id !== streamingId);
+        console.log('Replacing streaming message with final message');
+        return [...withoutStreaming, finalMessage];
+      });
+
+      // Clear streaming state
       setStreamingMessageId(null);
 
       // Save the complete message if there's content
@@ -375,6 +400,20 @@ const StreamingChatInterface = () => {
         console.log('Request was aborted');
         return;
       }
+      
+      // Add error message to chat
+      const errorMessage: Message = {
+        id: `error_${Date.now()}`,
+        content: 'Sorry, I encountered an error while processing your request. Please try again.',
+        role: 'assistant',
+        timestamp: new Date(),
+        isStreaming: false
+      };
+
+      setMessages(prev => {
+        const withoutStreaming = prev.filter(msg => msg.id !== streamingMessageId);
+        return [...withoutStreaming, errorMessage];
+      });
       
       throw error;
     }
@@ -411,7 +450,7 @@ const StreamingChatInterface = () => {
     if (!input.trim() || !user || isLoading) return;
 
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: `user_${Date.now()}`,
       content: input.trim(),
       role: 'user',
       timestamp: new Date()
@@ -444,7 +483,7 @@ const StreamingChatInterface = () => {
         console.log('Detected image generation request');
         
         const loadingMessage: Message = {
-          id: (Date.now() + 1).toString(),
+          id: `loading_${Date.now()}`,
           content: 'Generating image...',
           role: 'assistant',
           timestamp: new Date()
@@ -455,7 +494,7 @@ const StreamingChatInterface = () => {
           const imageUrl = await generateImage(currentInput);
           
           const imageMessage: Message = {
-            id: (Date.now() + 2).toString(),
+            id: `img_${Date.now()}`,
             content: `Generated image based on: "${currentInput}"`,
             role: 'assistant',
             timestamp: new Date(),
@@ -473,7 +512,7 @@ const StreamingChatInterface = () => {
           console.error('Image generation error:', imageError);
           
           const errorMessage: Message = {
-            id: (Date.now() + 2).toString(),
+            id: `error_${Date.now()}`,
             content: `Sorry, I couldn't generate the image. Error: ${imageError.message}`,
             role: 'assistant',
             timestamp: new Date()
@@ -649,7 +688,7 @@ const StreamingChatInterface = () => {
                 </div>
               </div>
             </form>
-            <p className="text-xs text-gray-500 text-center mt-3 font-[system-ui,-apple-system,BlinkMacSystemFont,'Segoe_UI',Roboto,sans-serif]">
+            <p className="text-xs text-gray-500 text-center mt-3 font-[system-ui,-apple-system,BlinkMacSystemFont,'Segue_UI',Roboto,sans-serif]">
               ChatGPT can make mistakes. Check important info.
             </p>
           </div>
