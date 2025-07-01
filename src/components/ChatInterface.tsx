@@ -247,7 +247,7 @@ Rewrite this prompt:`
         body: {
           prompt: enhancedPrompt,
           model: 'dall-e-3',
-          size: '1024x1536', // Updated size for better quality
+          size: '1024x1792', // Fixed: Changed from invalid '1024x1536' to valid '1024x1792'
           quality: 'hd', // HD quality for best results
           n: 1
         }
