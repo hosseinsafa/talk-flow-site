@@ -185,142 +185,6 @@ const StreamingChatInterface = () => {
             lowerText.includes('بساز'));
   };
 
-  const streamChatResponse = async (messages: Message[], sessionId: string) => {
-    try {
-      abortControllerRef.current = new AbortController();
-      
-      console.log('Starting streaming chat request...');
-      
-      const { data, error } = await supabase.functions.invoke('streaming-chat', {
-        body: {
-          messages: messages.map(msg => ({
-            role: msg.role,
-            content: msg.content
-          })),
-          model: selectedModel,
-          max_tokens: 2000,
-          temperature: 0.7
-        }
-      });
-
-      if (error) {
-        console.error('Error from streaming-chat function:', error);
-        throw new Error(`Streaming error: ${error.message}`);
-      }
-
-      console.log('Streaming chat response received:', data);
-      
-      // For the streaming implementation, we'll use a direct fetch to handle the stream
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/streaming-chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({
-          messages: messages.map(msg => ({
-            role: msg.role,
-            content: msg.content
-          })),
-          model: selectedModel,
-          max_tokens: 2000,
-          temperature: 0.7
-        }),
-        signal: abortControllerRef.current.signal
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('No response body reader available');
-      }
-
-      const decoder = new TextDecoder();
-      let accumulatedContent = '';
-      const streamingId = Date.now().toString();
-      setStreamingMessageId(streamingId);
-
-      // Add initial streaming message
-      const initialMessage: Message = {
-        id: streamingId,
-        content: '',
-        role: 'assistant',
-        timestamp: new Date(),
-        isStreaming: true
-      };
-
-      setMessages(prev => [...prev, initialMessage]);
-
-      while (true) {
-        const { done, value } = await reader.read();
-        
-        if (done) break;
-
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n');
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            if (data === '[DONE]') {
-              break;
-            }
-
-            try {
-              const parsed = JSON.parse(data);
-              const content = parsed.choices?.[0]?.delta?.content;
-              
-              if (content) {
-                accumulatedContent += content;
-                
-                // Update the streaming message
-                setMessages(prev => prev.map(msg => 
-                  msg.id === streamingId 
-                    ? { ...msg, content: accumulatedContent }
-                    : msg
-                ));
-              }
-            } catch (parseError) {
-              // Some chunks may not be valid JSON, which is expected
-              console.log('Parse error (expected for some chunks):', parseError);
-            }
-          }
-        }
-      }
-
-      // Finalize the streaming message
-      setMessages(prev => prev.map(msg => 
-        msg.id === streamingId 
-          ? { ...msg, isStreaming: false }
-          : msg
-      ));
-
-      setStreamingMessageId(null);
-
-      // Save the complete message
-      if (accumulatedContent) {
-        await saveMessage(sessionId, accumulatedContent, 'assistant');
-        await updateUsageCount();
-      }
-
-      return accumulatedContent;
-
-    } catch (error) {
-      console.error('Streaming error:', error);
-      setStreamingMessageId(null);
-      
-      if (error.name === 'AbortError') {
-        console.log('Request was aborted');
-        return;
-      }
-      
-      throw error;
-    }
-  };
-
   const generateImage = async (prompt: string) => {
     try {
       console.log('Starting DALL·E 3 image generation with prompt:', prompt);
@@ -373,6 +237,129 @@ const StreamingChatInterface = () => {
       }
     } catch (error) {
       console.error('Error saving image generation:', error);
+    }
+  };
+
+  const streamChatResponse = async (messages: Message[], sessionId: string) => {
+    try {
+      abortControllerRef.current = new AbortController();
+      
+      console.log('Starting streaming chat request...');
+      
+      // Use direct fetch for streaming
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/streaming-chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          messages: messages.map(msg => ({
+            role: msg.role,
+            content: msg.content
+          })),
+          model: selectedModel,
+          max_tokens: 2000,
+          temperature: 0.7
+        }),
+        signal: abortControllerRef.current.signal
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Streaming response error:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No response body reader available');
+      }
+
+      const decoder = new TextDecoder();
+      let accumulatedContent = '';
+      const streamingId = Date.now().toString();
+      setStreamingMessageId(streamingId);
+
+      // Add initial streaming message
+      const initialMessage: Message = {
+        id: streamingId,
+        content: '',
+        role: 'assistant',
+        timestamp: new Date(),
+        isStreaming: true
+      };
+
+      setMessages(prev => [...prev, initialMessage]);
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n');
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6).trim();
+              if (data === '[DONE]') {
+                break;
+              }
+
+              try {
+                const parsed = JSON.parse(data);
+                const content = parsed.choices?.[0]?.delta?.content;
+                
+                if (content) {
+                  accumulatedContent += content;
+                  
+                  // Update the streaming message
+                  setMessages(prev => prev.map(msg => 
+                    msg.id === streamingId 
+                      ? { ...msg, content: accumulatedContent }
+                      : msg
+                  ));
+                }
+              } catch (parseError) {
+                // Some chunks may not be valid JSON, which is expected
+                console.log('Parse error (expected for some chunks):', parseError);
+              }
+            }
+          }
+        }
+      } catch (streamError) {
+        console.error('Stream reading error:', streamError);
+      }
+
+      // Finalize the streaming message
+      setMessages(prev => prev.map(msg => 
+        msg.id === streamingId 
+          ? { ...msg, isStreaming: false }
+          : msg
+      ));
+
+      setStreamingMessageId(null);
+
+      // Save the complete message
+      if (accumulatedContent) {
+        await saveMessage(sessionId, accumulatedContent, 'assistant');
+        await updateUsageCount();
+      }
+
+      return accumulatedContent;
+
+    } catch (error) {
+      console.error('Streaming error:', error);
+      setStreamingMessageId(null);
+      
+      if (error.name === 'AbortError') {
+        console.log('Request was aborted');
+        return;
+      }
+      
+      throw error;
     }
   };
 
@@ -558,7 +545,7 @@ const StreamingChatInterface = () => {
           </div>
           
           <div className="flex items-center gap-3">
-            {/* Model Selector - No Plus Button */}
+            {/* Model Selector */}
             <Select value={selectedModel} onValueChange={setSelectedModel}>
               <SelectTrigger className="w-36 h-9 text-sm border-white/20 bg-[#2f2f2f] text-white">
                 <SelectValue />
@@ -591,7 +578,7 @@ const StreamingChatInterface = () => {
                     <h3 className="font-medium mb-2">Explain quantum physics</h3>
                     <p className="text-sm text-gray-400">in simple terms</p>
                   </div>
-                  <div className="p-4 rounded-xl bg-[#2f2f2f] hover:bg-[#3f3f3f] transition-colors cursor-pointer">
+                  <div className="p-4 rounded-xl bg-[#2f2f2f] hover:bg-[#3f3f2f] transition-colors cursor-pointer">
                     <h3 className="font-medium mb-2">Plan a trip</h3>
                     <p className="text-sm text-gray-400">to Japan for 7 days</p>
                   </div>

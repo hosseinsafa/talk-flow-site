@@ -19,12 +19,16 @@ serve(async (req) => {
   try {
     const { messages, model = 'gpt-4o', max_tokens = 2000, temperature = 0.7 } = await req.json();
 
-    console.log('Streaming chat request:', { model, messages: messages.length });
+    console.log('Streaming chat request:', { model, messages: messages?.length });
 
-    // Default system prompt for friendly, conversational tone
+    if (!openAIApiKey) {
+      throw new Error('OpenAI API key not configured');
+    }
+
+    // System prompt for consistent friendly tone
     const systemMessage = {
       role: 'system',
-      content: 'You are ChatGPT, a helpful AI assistant created by OpenAI. Respond in a friendly, clear, and conversational tone. Be helpful, accurate, and engaging while maintaining a natural conversation flow.'
+      content: 'You are ChatGPT, a helpful AI assistant created by OpenAI. You are friendly, clear, and conversational. Provide helpful, accurate responses while maintaining a natural conversation flow. You can communicate in any language the user prefers.'
     };
 
     const allMessages = [systemMessage, ...messages];
@@ -50,7 +54,10 @@ serve(async (req) => {
       throw new Error(`OpenAI API error: ${response.status} ${error}`);
     }
 
-    // Create a ReadableStream to handle the streaming response
+    // Create a readable stream for the response
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+
     const stream = new ReadableStream({
       async start(controller) {
         const reader = response.body?.getReader();
@@ -59,22 +66,20 @@ serve(async (req) => {
           return;
         }
 
-        const decoder = new TextDecoder();
-
         try {
           while (true) {
             const { done, value } = await reader.read();
             
             if (done) {
-              // Send the final [DONE] message
-              controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+              // Send final done message
+              controller.enqueue(encoder.encode('data: [DONE]\n\n'));
               controller.close();
               break;
             }
 
-            // Decode the chunk and forward it
-            const chunk = decoder.decode(value);
-            controller.enqueue(new TextEncoder().encode(chunk));
+            // Forward the chunk as-is
+            const chunk = decoder.decode(value, { stream: true });
+            controller.enqueue(encoder.encode(chunk));
           }
         } catch (error) {
           console.error('Stream processing error:', error);
