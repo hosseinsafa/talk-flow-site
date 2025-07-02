@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Image, 
   Sparkles,
@@ -13,7 +14,8 @@ import {
   Download,
   History,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  AspectRatio as AspectRatioIcon
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -27,6 +29,7 @@ interface GenerationSettings {
   width: number;
   height: number;
   negative_prompt: string;
+  aspect_ratio: string;
 }
 
 interface GeneratedImage {
@@ -55,8 +58,29 @@ const ImageGeneration = () => {
     cfg_scale: 1.0,
     width: 1024,
     height: 1024,
-    negative_prompt: ''
+    negative_prompt: '',
+    aspect_ratio: '1:1'
   });
+
+  // Aspect ratio options with Persian labels and corresponding dimensions
+  const aspectRatioOptions = [
+    { label: 'مربع 1:1', value: '1:1', width: 1024, height: 1024 },
+    { label: 'افقی 16:9', value: '16:9', width: 1280, height: 720 },
+    { label: 'عمودی 9:16', value: '9:16', width: 720, height: 1280 },
+  ];
+
+  // Update dimensions when aspect ratio changes
+  const handleAspectRatioChange = (aspectRatio: string) => {
+    const option = aspectRatioOptions.find(opt => opt.value === aspectRatio);
+    if (option) {
+      setSettings(prev => ({
+        ...prev,
+        aspect_ratio: aspectRatio,
+        width: option.width,
+        height: option.height
+      }));
+    }
+  };
 
   // Update default settings based on selected model
   useEffect(() => {
@@ -175,7 +199,7 @@ const ImageGeneration = () => {
 
       console.log('Session validated successfully');
 
-      // Call the new Replicate generate function
+      // Call the new Replicate generate function with dynamic width/height
       const { data, error } = await supabase.functions.invoke('replicate-generate', {
         body: {
           prompt,
@@ -301,12 +325,6 @@ const ImageGeneration = () => {
     setPrompt(newPrompt);
   };
 
-  const sizePresets = [
-    { label: 'مربع', width: 1024, height: 1024 },
-    { label: 'عمودی', width: 768, height: 1344 },
-    { label: 'افقی', width: 1344, height: 768 },
-  ];
-
   return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
       {/* Header */}
@@ -323,6 +341,33 @@ const ImageGeneration = () => {
           {/* Model Selector */}
           <div className="mb-6">
             <ModelSelector value={selectedModel} onValueChange={setSelectedModel} />
+          </div>
+
+          {/* Aspect Ratio Selector */}
+          <div className="mb-6">
+            <Label className="text-gray-300 text-sm mb-2 block flex items-center">
+              <AspectRatioIcon className="w-4 h-4 mr-2" />
+              انتخاب نسبت تصویر
+            </Label>
+            <Select value={settings.aspect_ratio} onValueChange={handleAspectRatioChange}>
+              <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
+                <SelectValue placeholder="انتخاب نسبت تصویر" />
+              </SelectTrigger>
+              <SelectContent className="bg-gray-800 border-gray-600">
+                {aspectRatioOptions.map((option) => (
+                  <SelectItem 
+                    key={option.value} 
+                    value={option.value}
+                    className="text-white hover:bg-gray-700 focus:bg-gray-700"
+                  >
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="text-gray-400 text-xs mt-1">
+              ابعاد: {settings.width} × {settings.height}
+            </div>
           </div>
 
           <Textarea
@@ -364,24 +409,6 @@ const ImageGeneration = () => {
           {/* Advanced Settings */}
           {showSettings && (
             <div className="bg-gray-800 rounded-lg p-4 mb-4 space-y-4">
-              {/* Size Presets */}
-              <div>
-                <Label className="text-gray-300 text-sm mb-2 block">اندازه تصویر</Label>
-                <div className="flex gap-2 mb-3">
-                  {sizePresets.map((preset, index) => (
-                    <Button
-                      key={index}
-                      variant={settings.width === preset.width && settings.height === preset.height ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setSettings(prev => ({ ...prev, width: preset.width, height: preset.height }))}
-                      className="text-xs"
-                    >
-                      {preset.label}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="text-gray-300 text-sm">عرض</Label>
@@ -542,6 +569,11 @@ const ImageGeneration = () => {
               <div className="text-white">
                 در حال تولید تصویر با {selectedModel === 'flux_schnell' ? 'Flux Schnell' : 'Flux Dev'}...
                 <br />
+                <span className="text-gray-400 text-sm">
+                  نسبت تصویر: {aspectRatioOptions.find(opt => opt.value === settings.aspect_ratio)?.label} 
+                  ({settings.width}×{settings.height})
+                </span>
+                <br />
                 <span className="text-gray-400 text-sm">این ممکن است چند دقیقه طول بکشد.</span>
               </div>
             </div>
@@ -556,6 +588,7 @@ const ImageGeneration = () => {
           <div>Auth Method: {user ? 'Supabase' : phoneUser ? 'Phone' : 'None'}</div>
           <div>Session: {session ? 'Active' : 'None'}</div>
           <div>Model: {selectedModel}</div>
+          <div>Aspect Ratio: {settings.aspect_ratio} ({settings.width}×{settings.height})</div>
         </div>
       )}
 
