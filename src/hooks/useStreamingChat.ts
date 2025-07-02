@@ -13,6 +13,8 @@ export const useStreamingChat = () => {
     saveMessage: (sessionId: string, content: string, role: 'user' | 'assistant') => Promise<void>,
     updateUsageCount: () => Promise<void>
   ) => {
+    let streamingId: string | null = null;
+    
     try {
       console.log('🚀 Starting streaming chat request...');
       
@@ -54,7 +56,7 @@ export const useStreamingChat = () => {
 
       const decoder = new TextDecoder();
       let accumulatedContent = '';
-      const streamingId = `streaming_${Date.now()}`;
+      streamingId = `streaming_${Date.now()}`;
       
       console.log('✅ Created streaming message with ID:', streamingId);
       setStreamingMessageId(streamingId);
@@ -179,7 +181,7 @@ export const useStreamingChat = () => {
       };
 
       setMessages(prev => {
-        const withoutStreaming = prev.filter(msg => msg.id !== streamingId);
+        const withoutStreaming = streamingId ? prev.filter(msg => msg.id !== streamingId) : prev;
         return [...withoutStreaming, errorMessage];
       });
       
