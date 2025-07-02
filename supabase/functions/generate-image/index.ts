@@ -14,21 +14,21 @@ const enhancePrompt = (originalPrompt: string): string => {
   
   // Check if prompt already has quality keywords
   const hasQualityKeywords = [
-    'highly detailed', 'ultra realistic', 'cinematic lighting', 'professional photography',
-    'detailed', 'realistic', 'high quality', 'hd', '8k', 'professional'
+    'highly detailed', 'ultra realistic', '8k', 'professional lighting', 'sharp focus',
+    'detailed', 'realistic', 'high quality', 'hd', 'professional'
   ].some(keyword => lowerPrompt.includes(keyword));
   
   if (hasQualityKeywords) {
     return originalPrompt;
   }
   
-  // Add quality enhancement
-  return `${originalPrompt}, highly detailed, ultra realistic, cinematic lighting, professional photography, 8K quality`;
+  // Add quality enhancement to match ChatGPT standards
+  return `${originalPrompt}, highly detailed, ultra realistic, 8K, professional lighting, sharp focus`;
 };
 
 const generateSingleImage = async (prompt: string): Promise<string | null> => {
   try {
-    console.log('🎨 Generating single image with enhanced prompt:', prompt.substring(0, 100) + '...');
+    console.log('🎨 Generating single 1024x1024 HD image with enhanced prompt:', prompt.substring(0, 100) + '...');
     
     const response = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
@@ -39,10 +39,10 @@ const generateSingleImage = async (prompt: string): Promise<string | null> => {
       body: JSON.stringify({
         model: 'dall-e-3',
         prompt: prompt,
-        n: 1,
-        size: '1792x1024',
-        quality: 'hd',
-        style: 'vivid'
+        n: 1,                    // DALL·E 3 only supports n=1
+        size: '1024x1024',       // ChatGPT standard size
+        quality: 'hd',           // High quality for sharpness
+        style: 'vivid'           // Vivid style for color vibrance
       }),
     });
 
@@ -60,7 +60,7 @@ const generateSingleImage = async (prompt: string): Promise<string | null> => {
     }
 
     const imageUrl = data.data[0].url;
-    console.log('✅ Single image generated successfully');
+    console.log('✅ Single 1024x1024 HD image generated successfully');
     return imageUrl;
     
   } catch (error) {
@@ -70,7 +70,7 @@ const generateSingleImage = async (prompt: string): Promise<string | null> => {
 };
 
 serve(async (req) => {
-  console.log('🚀 === ENHANCED GENERATE IMAGE FUNCTION CALLED ===');
+  console.log('🚀 === CHATGPT-QUALITY DALLE-3 GENERATION ===');
   console.log('🔍 Request method:', req.method);
   
   // Handle CORS preflight requests
@@ -98,27 +98,27 @@ serve(async (req) => {
       throw new Error('Prompt is required for image generation');
     }
 
-    // Enhance the prompt for better quality
+    // Enhance the prompt for ChatGPT-quality output
     const enhancedPrompt = enhancePrompt(prompt);
-    console.log('🎯 Enhanced prompt:', enhancedPrompt);
+    console.log('🎯 Enhanced prompt for ChatGPT quality:', enhancedPrompt);
 
-    console.log('🚀 Starting parallel image generation (Best of 4)...');
+    console.log('🚀 Starting parallel generation (Best of 4) at 1024x1024 HD...');
     
-    // Generate 4 images in parallel
+    // Generate 4 images in parallel for best quality selection
     const generationPromises = Array(4).fill(null).map((_, index) => {
       console.log(`🎨 Starting generation ${index + 1}/4`);
       return generateSingleImage(enhancedPrompt);
     });
 
     // Wait for all generations to complete
-    console.log('⏳ Waiting for all 4 generations to complete...');
+    console.log('⏳ Waiting for all 4 ChatGPT-quality generations to complete...');
     const results = await Promise.allSettled(generationPromises);
     
     // Extract successful URLs
     const imageUrls: string[] = [];
     results.forEach((result, index) => {
       if (result.status === 'fulfilled' && result.value) {
-        console.log(`✅ Generation ${index + 1}/4 successful`);
+        console.log(`✅ Generation ${index + 1}/4 successful - 1024x1024 HD`);
         imageUrls.push(result.value);
       } else {
         console.log(`❌ Generation ${index + 1}/4 failed:`, result.status === 'rejected' ? result.reason : 'No URL returned');
@@ -126,15 +126,15 @@ serve(async (req) => {
     });
 
     if (imageUrls.length === 0) {
-      console.error('❌ CRITICAL: All 4 generations failed');
+      console.error('❌ CRITICAL: All 4 ChatGPT-quality generations failed');
       throw new Error('All image generation attempts failed');
     }
 
-    console.log(`🎉 Successfully generated ${imageUrls.length}/4 images`);
+    console.log(`🎉 Successfully generated ${imageUrls.length}/4 ChatGPT-quality images at 1024x1024 HD`);
 
     // For Phase 1: Return the first successful image as primary
     const primaryImageUrl = imageUrls[0];
-    console.log('🖼️ Primary image URL:', primaryImageUrl);
+    console.log('🖼️ Primary ChatGPT-quality image URL:', primaryImageUrl);
 
     // Test if primary image URL is accessible
     console.log('🔍 Testing primary image URL accessibility...');
@@ -145,16 +145,22 @@ serve(async (req) => {
       console.error('⚠️ Primary image URL test failed:', urlError.message);
     }
 
-    // Return enhanced response format
+    // Return ChatGPT-quality response format
     const responsePayload = {
       status: 'success',
       image_url: primaryImageUrl, // Primary image for backward compatibility
       image_urls: imageUrls, // All generated images for future selection
       generation_count: imageUrls.length,
-      enhanced_prompt: enhancedPrompt
+      enhanced_prompt: enhancedPrompt,
+      settings: {
+        size: '1024x1024',
+        quality: 'hd',
+        style: 'vivid',
+        model: 'dall-e-3'
+      }
     };
 
-    console.log('📤 Sending enhanced response:', JSON.stringify({
+    console.log('📤 Sending ChatGPT-quality response:', JSON.stringify({
       ...responsePayload,
       image_urls: imageUrls.map(url => url.substring(0, 50) + '...')
     }, null, 2));
@@ -164,7 +170,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('❌ CRITICAL: Error in enhanced generate-image function:', {
+    console.error('❌ CRITICAL: Error in ChatGPT-quality generate-image function:', {
       message: error.message,
       stack: error.stack,
       name: error.name

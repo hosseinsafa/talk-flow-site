@@ -9,6 +9,12 @@ interface ImageGenerationResponse {
   image_urls?: string[];
   generation_count?: number;
   enhanced_prompt?: string;
+  settings?: {
+    size: string;
+    quality: string;
+    style: string;
+    model: string;
+  };
   error?: string;
 }
 
@@ -67,17 +73,17 @@ export const useImageGeneration = () => {
 
   const generateImage = async (prompt: string) => {
     try {
-      console.log('🚀 === STARTING ENHANCED IMAGE GENERATION ===');
+      console.log('🚀 === STARTING CHATGPT-QUALITY IMAGE GENERATION ===');
       console.log('📝 Original prompt:', prompt);
       
-      console.log('📡 Calling enhanced generate-image function...');
+      console.log('📡 Calling ChatGPT-quality generate-image function...');
       const functionResponse = await supabase.functions.invoke('generate-image', {
         body: {
           prompt: prompt
         }
       });
 
-      console.log('📊 Enhanced function response:', {
+      console.log('📊 ChatGPT-quality function response:', {
         data: functionResponse.data,
         error: functionResponse.error,
         hasData: !!functionResponse.data,
@@ -90,46 +96,49 @@ export const useImageGeneration = () => {
       }
 
       if (!functionResponse.data) {
-        console.error('❌ No data returned from enhanced function');
-        throw new Error('No response from enhanced image generation service');
+        console.error('❌ No data returned from ChatGPT-quality function');
+        throw new Error('No response from ChatGPT-quality image generation service');
       }
 
       const responseData: ImageGenerationResponse = functionResponse.data;
-      console.log('📋 Enhanced response data:', responseData);
+      console.log('📋 ChatGPT-quality response data:', responseData);
 
       if (responseData.status !== 'success') {
         console.error('❌ Function returned error status:', responseData);
-        throw new Error(responseData.error || 'Enhanced image generation failed');
+        throw new Error(responseData.error || 'ChatGPT-quality image generation failed');
       }
 
       if (!responseData.image_url) {
-        console.error('❌ No primary image_url in enhanced response:', responseData);
-        throw new Error('No primary image URL returned from enhanced DALL·E 3');
+        console.error('❌ No primary image_url in ChatGPT-quality response:', responseData);
+        throw new Error('No primary image URL returned from ChatGPT-quality DALL·E 3');
       }
 
       const primaryImageUrl = responseData.image_url;
       const allImageUrls = responseData.image_urls || [primaryImageUrl];
       const generationCount = responseData.generation_count || 1;
       const enhancedPrompt = responseData.enhanced_prompt || prompt;
+      const settings = responseData.settings;
       
-      console.log('🖼️ Enhanced generation results:', {
+      console.log('🖼️ ChatGPT-quality generation results:', {
         primaryImageUrl: primaryImageUrl.substring(0, 50) + '...',
         totalGenerated: generationCount,
         allUrls: allImageUrls.length,
-        enhancedPrompt: enhancedPrompt.substring(0, 100) + '...'
+        enhancedPrompt: enhancedPrompt.substring(0, 100) + '...',
+        settings: settings
       });
       
-      // Save to database with enhanced information
+      // Save to database with ChatGPT-quality metadata
       await saveImageGeneration(enhancedPrompt, primaryImageUrl, {
         generation_count: generationCount,
-        all_urls: allImageUrls
+        all_urls: allImageUrls,
+        settings: settings
       });
       
-      console.log('✅ === ENHANCED IMAGE GENERATION COMPLETED ===');
+      console.log('✅ === CHATGPT-QUALITY IMAGE GENERATION COMPLETED ===');
       return primaryImageUrl;
       
     } catch (error) {
-      console.error('❌ Error in enhanced generateImage:', error);
+      console.error('❌ Error in ChatGPT-quality generateImage:', error);
       throw error;
     }
   };
@@ -137,7 +146,16 @@ export const useImageGeneration = () => {
   const saveImageGeneration = async (
     prompt: string, 
     imageUrl: string, 
-    metadata?: { generation_count?: number; all_urls?: string[] }
+    metadata?: { 
+      generation_count?: number; 
+      all_urls?: string[];
+      settings?: {
+        size: string;
+        quality: string;
+        style: string;
+        model: string;
+      };
+    }
   ) => {
     if (!user) {
       console.log('⚠️ No user found, skipping database save');
@@ -145,12 +163,12 @@ export const useImageGeneration = () => {
     }
 
     try {
-      console.log('💾 Saving enhanced image generation to database...');
+      console.log('💾 Saving ChatGPT-quality image generation to database...');
       
       // Create enhanced prompt note for database
       const promptNote = metadata?.generation_count 
-        ? `Enhanced generation (${metadata.generation_count} images generated)`
-        : 'Single generation';
+        ? `ChatGPT-quality generation (${metadata.generation_count} images generated at ${metadata.settings?.size || '1024x1024'})`
+        : 'Single ChatGPT-quality generation';
       
       const { data, error } = await supabase
         .from('image_generations')
@@ -158,17 +176,18 @@ export const useImageGeneration = () => {
           user_id: user.id,
           prompt: prompt,
           image_url: imageUrl,
-          model_type: 'dall-e-3-enhanced',
+          model_type: 'dall-e-3-chatgpt-quality',
           status: 'completed',
-          width: 1792,
+          width: 1024,
           height: 1024,
           steps: 50,
           cfg_scale: 7.0,
           // Store metadata in error_message field as JSON string for now
           error_message: metadata ? JSON.stringify({
-            type: 'metadata',
+            type: 'chatgpt_quality_metadata',
             generation_count: metadata.generation_count,
             all_urls_count: metadata.all_urls?.length,
+            settings: metadata.settings,
             note: promptNote
           }) : null
         })
@@ -180,10 +199,10 @@ export const useImageGeneration = () => {
         throw error;
       }
 
-      console.log('✅ Enhanced image generation saved:', data.id);
+      console.log('✅ ChatGPT-quality image generation saved:', data.id);
       return data;
     } catch (error) {
-      console.error('❌ Error saving enhanced image generation:', error);
+      console.error('❌ Error saving ChatGPT-quality image generation:', error);
       throw error;
     }
   };
