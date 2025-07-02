@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Menu, ArrowUp, Plus, Mic } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -458,7 +459,7 @@ Rewrite this prompt:`
   };
 
   return (
-    <div className="min-h-screen bg-[#212121] text-white">
+    <div className="h-screen flex bg-[#212121] text-white">
       {/* Sidebar */}
       <ChatSidebar
         isOpen={sidebarOpen}
@@ -469,10 +470,10 @@ Rewrite this prompt:`
         onSelectSession={selectSession}
       />
 
-      {/* Main Chat Area - Changed from flex to normal layout */}
-      <div className={`transition-all duration-300 ${sidebarOpen ? 'lg:ml-80' : ''}`}>
-        {/* Header - Fixed at top */}
-        <div className="sticky top-0 z-10 flex items-center justify-between p-4 border-b border-white/10 bg-[#212121]">
+      {/* Main Content */}
+      <div className={`flex flex-col flex-1 transition-all duration-300 ${sidebarOpen ? 'lg:ml-80' : ''} relative`}>
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-white/10 bg-[#212121] shrink-0">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -506,10 +507,10 @@ Rewrite this prompt:`
           </div>
         </div>
 
-        {/* Messages - Scrollable content */}
-        <div className="pb-32">
+        {/* Messages Area - Scrollable */}
+        <div className="flex-1 overflow-y-auto" style={{ height: 'calc(100vh - 140px)' }}>
           {messages.length === 0 ? (
-            <div className="flex items-center justify-center min-h-screen p-6">
+            <div className="flex items-center justify-center h-full p-6">
               <div className="text-center text-white max-w-2xl">
                 <h2 className="text-4xl font-semibold mb-6">How can I help, {getUserName()}?</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
@@ -533,7 +534,7 @@ Rewrite this prompt:`
               </div>
             </div>
           ) : (
-            <>
+            <div className="pb-4">
               {messages.map((message) => (
                 <ChatMessage key={message.id} message={message} />
               ))}
@@ -553,13 +554,13 @@ Rewrite this prompt:`
                   </div>
                 </div>
               )}
-            </>
+              <div ref={messagesEndRef} />
+            </div>
           )}
-          <div ref={messagesEndRef} />
         </div>
 
-        {/* Input - Fixed at bottom */}
-        <div className="fixed bottom-0 left-0 right-0 p-6 bg-[#212121] border-t border-white/10" style={{ marginLeft: sidebarOpen ? '320px' : '0' }}>
+        {/* Input Area - Fixed at bottom */}
+        <div className="shrink-0 p-6 bg-[#212121] border-t border-white/10">
           <div className="max-w-4xl mx-auto">
             <form onSubmit={handleSubmit} className="relative">
               <div className="relative bg-[#2f2f2f] border border-white/20 rounded-3xl shadow-lg hover:border-white/30 transition-colors">

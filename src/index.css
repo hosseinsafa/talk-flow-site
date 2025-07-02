@@ -53,29 +53,28 @@
     @apply border-border;
   }
 
+  html {
+    height: 100%;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
   body {
     @apply bg-black text-white font-vazir;
     direction: rtl;
     text-align: right;
-    /* Enable scrolling */
-    overflow: auto !important;
+    height: 100%;
+    overflow: auto;
     -webkit-overflow-scrolling: touch;
-    /* Remove fixed positioning issues */
     position: relative;
-  }
-
-  /* PWA and Mobile specific styles */
-  html {
-    /* Allow full scrolling */
-    overflow: auto !important;
-    height: auto;
+    margin: 0;
+    padding: 0;
   }
 
   #root {
-    /* Remove height restrictions */
-    min-height: 100vh;
-    min-height: 100dvh;
-    overflow: visible !important;
+    height: 100%;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   /* Safe area support for notched devices */
@@ -114,16 +113,19 @@
     font-size: 16px;
   }
 
-  /* Mobile scrolling fixes */
+  /* Mobile specific fixes */
   @media (max-width: 768px) {
-    body {
-      /* Force enable scrolling on mobile */
-      overflow-y: auto !important;
+    html, body {
+      height: 100vh;
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
       overscroll-behavior: auto;
     }
     
-    html {
-      overflow-y: auto !important;
+    #root {
+      height: 100vh;
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
     }
     
     /* Hide scrollbar but keep functionality */
