@@ -177,48 +177,60 @@ const StreamingChatInterface = () => {
   };
 
   const isImageGenerationRequest = (text: string): { isRequest: boolean; hasSpecificObject: boolean; object?: string } => {
+    console.log('🔍 Checking if text is image generation request:', text);
     const lowerText = text.toLowerCase();
     
-    // Persian patterns
+    // Persian patterns - more comprehensive
     const persianPatterns = [
       /می‌?تون(ی|ید)\s+(تصویر|عکس)\s+(.+?)\s+بساز(ی|ید)/i,
       /می‌?تون(ی|ید)\s+(تصویر|عکس)\s+بساز(ی|ید)/i,
       /(تصویر|عکس)\s+(.+?)\s+بساز/i,
-      /(بساز|ایجاد کن|درست کن)\s+(تصویر|عکس)/i
+      /(بساز|ایجاد کن|درست کن)\s+(تصویر|عکس)/i,
+      /می‌?تون(ی|ید)\s+(.+?)\s+(تصویر|عکس)\s+بساز(ی|ید)/i,
+      /(تصویر|عکس)\s+(یک|یه)\s+(.+?)\s+بساز/i
     ];
 
-    // English patterns
+    // English patterns - more comprehensive
     const englishPatterns = [
       /can you (generate|create|make|draw)\s+(an?|the)?\s*image\s+of\s+(.+)/i,
       /can you (generate|create|make|draw)\s+(an?|the)?\s*(image|picture|photo)/i,
       /(generate|create|make|draw)\s+(an?|the)?\s*image\s+of\s+(.+)/i,
-      /(generate|create|make|draw)\s+(an?|the)?\s*(image|picture|photo)/i
+      /(generate|create|make|draw)\s+(an?|the)?\s*(image|picture|photo)/i,
+      /can you.*image/i,
+      /generate.*image/i,
+      /create.*image/i,
+      /make.*image/i
     ];
 
-    // Check for specific object requests
+    // Check for specific object requests in Persian
     for (const pattern of persianPatterns) {
       const match = text.match(pattern);
       if (match) {
+        console.log('✅ Persian image request detected:', match);
         const objectMatch = match[3] || match[2];
         if (objectMatch && !['تصویر', 'عکس', 'بساز', 'بسازی', 'بسازید'].includes(objectMatch.trim())) {
+          console.log('✅ Found specific object in Persian:', objectMatch);
           return { isRequest: true, hasSpecificObject: true, object: objectMatch.trim() };
         }
         return { isRequest: true, hasSpecificObject: false };
       }
     }
 
+    // Check for specific object requests in English
     for (const pattern of englishPatterns) {
       const match = text.match(pattern);
       if (match) {
+        console.log('✅ English image request detected:', match);
         const objectMatch = match[3];
         if (objectMatch) {
+          console.log('✅ Found specific object in English:', objectMatch);
           return { isRequest: true, hasSpecificObject: true, object: objectMatch.trim() };
         }
         return { isRequest: true, hasSpecificObject: false };
       }
     }
 
-    // Basic keyword detection
+    // Basic keyword detection as fallback
     const persianKeywords = ['تصویر', 'عکس', 'بساز', 'ایجاد', 'طراحی'];
     const englishKeywords = ['generate', 'create', 'make', 'image', 'picture', 'photo'];
     
@@ -226,9 +238,11 @@ const StreamingChatInterface = () => {
     const hasEnglishKeywords = englishKeywords.some(keyword => lowerText.includes(keyword));
     
     if (hasPersianKeywords || hasEnglishKeywords) {
+      console.log('✅ Basic keyword match found');
       return { isRequest: true, hasSpecificObject: false };
     }
 
+    console.log('❌ No image request detected');
     return { isRequest: false, hasSpecificObject: false };
   };
 
@@ -239,15 +253,20 @@ const StreamingChatInterface = () => {
     ];
     
     const lowerText = text.toLowerCase().trim();
-    return confirmationKeywords.some(keyword => 
+    const isConfirmation = confirmationKeywords.some(keyword => 
       lowerText === keyword || lowerText.includes(keyword)
     );
+    
+    console.log('🔍 Checking confirmation:', text, '→', isConfirmation);
+    return isConfirmation;
   };
 
   const savePendingImageRequest = async (sessionId: string, prompt: string) => {
     if (!user) return null;
 
     try {
+      console.log('💾 Saving pending image request:', prompt);
+      
       // First, delete any existing pending requests for this user to ensure only one active request
       await supabase
         .from('pending_image_requests')
@@ -268,9 +287,10 @@ const StreamingChatInterface = () => {
         .single();
 
       if (error) throw error;
+      console.log('✅ Pending request saved:', data.id);
       return data.id;
     } catch (error) {
-      console.error('Error saving pending image request:', error);
+      console.error('❌ Error saving pending image request:', error);
       return null;
     }
   };
@@ -289,6 +309,7 @@ const StreamingChatInterface = () => {
         .single();
 
       if (error && error.code !== 'PGRST116') throw error; // PGRST116 is "no rows returned"
+      console.log('🔍 Found pending request:', data);
       return data;
     } catch (error) {
       console.error('Error getting pending image request:', error);
@@ -304,6 +325,7 @@ const StreamingChatInterface = () => {
         .eq('id', requestId);
 
       if (error) throw error;
+      console.log('✅ Marked request as completed');
     } catch (error) {
       console.error('Error marking request as completed:', error);
     }
@@ -311,7 +333,7 @@ const StreamingChatInterface = () => {
 
   const generateImage = async (prompt: string) => {
     try {
-      console.log('Starting DALL·E 3 image generation with prompt:', prompt);
+      console.log('🎨 Starting DALL·E 3 image generation with prompt:', prompt);
       
       const { data, error } = await supabase.functions.invoke('generate-image', {
         body: {
@@ -324,11 +346,11 @@ const StreamingChatInterface = () => {
       });
 
       if (error) {
-        console.error('Error calling generate-image:', error);
+        console.error('❌ Error calling generate-image:', error);
         throw new Error(error.message);
       }
 
-      console.log('DALL·E 3 generation completed:', data);
+      console.log('✅ DALL·E 3 generation completed:', data);
       
       if (data.data && data.data[0] && data.data[0].url) {
         await saveImageGeneration(prompt, data.data[0].url);
@@ -337,7 +359,7 @@ const StreamingChatInterface = () => {
         throw new Error('No image URL returned from DALL·E 3');
       }
     } catch (error) {
-      console.error('Error in generateImage:', error);
+      console.error('❌ Error in generateImage:', error);
       throw error;
     }
   };
@@ -613,8 +635,12 @@ const StreamingChatInterface = () => {
       const userLanguage = detectLanguage(currentInput);
       const imageRequest = isImageGenerationRequest(currentInput);
 
+      console.log('🔍 Language detected:', userLanguage);
+      console.log('🔍 Image request analysis:', imageRequest);
+
       // Check if this is a confirmation message
       if (isConfirmationMessage(currentInput)) {
+        console.log('🎯 Confirmation message detected');
         const pendingRequest = await getPendingImageRequest();
         
         if (pendingRequest) {
@@ -675,7 +701,7 @@ const StreamingChatInterface = () => {
       }
       // Check if this is an image generation request
       else if (imageRequest.isRequest) {
-        console.log('🎨 Detected image generation request');
+        console.log('🎨 Image generation request detected');
         
         let confirmationMessage: string;
         
@@ -683,19 +709,22 @@ const StreamingChatInterface = () => {
           if (imageRequest.hasSpecificObject && imageRequest.object) {
             confirmationMessage = `بله، می‌تونم تصویر '${imageRequest.object}' رو بسازم. آیا تأیید می‌کنید که تصویر ساخته شود؟`;
           } else {
-            confirmationMessage = 'بله، می‌تونم تصویر بسازم. چه تصویری نیاز دارید؟';
+            confirmationMessage = 'بله، می‌تونم تصویر بسازم. چه تصویری نیاز دارید؟ لطفاً مشخص کنید تا تأیید کنم.';
           }
         } else {
           if (imageRequest.hasSpecificObject && imageRequest.object) {
             confirmationMessage = `Yes, I can generate an image of '${imageRequest.object}'. Do you confirm to proceed with generating the image?`;
           } else {
-            confirmationMessage = 'Yes, I can generate an image. What image would you like me to generate?';
+            confirmationMessage = 'Yes, I can generate an image. What image would you like me to generate? Please specify so I can confirm.';
           }
         }
 
         // Save the pending request only if we have a specific object
         if (imageRequest.hasSpecificObject && imageRequest.object) {
           await savePendingImageRequest(sessionId, imageRequest.object);
+        } else {
+          // If no specific object, still save the general request for confirmation flow
+          await savePendingImageRequest(sessionId, currentInput);
         }
         
         const confirmationResponse: Message = {
