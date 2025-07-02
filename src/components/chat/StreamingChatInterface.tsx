@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import ChatMessage from './ChatMessage';
 import ChatSidebar from './ChatSidebar';
@@ -145,6 +144,10 @@ const StreamingChatInterface = () => {
             const imageUrl = await generateImage(pendingRequest.prompt);
             console.log('✅ Image generated successfully:', imageUrl);
             
+            if (!imageUrl) {
+              throw new Error('No image URL returned');
+            }
+            
             const imageMessage: Message = {
               id: `img_${Date.now()}`,
               content: userLanguage === 'persian' 
@@ -162,6 +165,8 @@ const StreamingChatInterface = () => {
             await saveMessage(sessionId, imageMessage.content, 'assistant');
             await updateUsageCount();
             await markPendingRequestCompleted(pendingRequest.id);
+
+            console.log('🎉 Image generation completed and saved');
 
           } catch (imageError) {
             console.error('❌ Image generation error:', imageError);

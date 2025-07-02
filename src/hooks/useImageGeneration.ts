@@ -162,9 +162,16 @@ export const useImageGeneration = () => {
     try {
       console.log('🎨 Starting DALL·E 3 image generation with prompt:', prompt);
       
+      // Enhance prompt for better results while maintaining Persian content
+      const enhancedPrompt = prompt.includes('تصویر') || prompt.includes('عکس') 
+        ? `${prompt}, high quality, detailed, professional` 
+        : `${prompt}, high quality, detailed, professional`;
+      
+      console.log('🚀 Enhanced prompt:', enhancedPrompt);
+      
       const { data, error } = await supabase.functions.invoke('generate-image', {
         body: {
-          prompt: prompt,
+          prompt: enhancedPrompt,
           model: 'dall-e-3',
           size: '1024x1024',
           quality: 'hd',
@@ -177,11 +184,22 @@ export const useImageGeneration = () => {
         throw new Error(`Image generation failed: ${error.message}`);
       }
 
-      console.log('✅ DALL·E 3 generation completed:', data);
+      console.log('✅ Generate-image function response:', data);
       
-      if (data?.data?.[0]?.url) {
-        await saveImageGeneration(prompt, data.data[0].url);
-        return data.data[0].url;
+      // Check for the expected response format
+      if (data?.status === 'success' && data?.data?.[0]?.url) {
+        const imageUrl = data.data[0].url;
+        console.log('✅ Image URL extracted:', imageUrl);
+        
+        await saveImageGeneration(prompt, imageUrl);
+        return imageUrl;
+      } else if (data?.data?.[0]?.url) {
+        // Fallback for old response format
+        const imageUrl = data.data[0].url;
+        console.log('✅ Image URL extracted (fallback):', imageUrl);
+        
+        await saveImageGeneration(prompt, imageUrl);
+        return imageUrl;
       } else {
         console.error('❌ No image URL in response:', data);
         throw new Error('No image URL returned from DALL·E 3');
@@ -196,6 +214,8 @@ export const useImageGeneration = () => {
     if (!user) return;
 
     try {
+      console.log('💾 Saving image generation to database:', { prompt: prompt.substring(0, 50) + '...', imageUrl: imageUrl.substring(0, 50) + '...' });
+      
       const { error } = await supabase
         .from('image_generations')
         .insert({
@@ -203,16 +223,20 @@ export const useImageGeneration = () => {
           prompt: prompt,
           image_url: imageUrl,
           model_type: 'dall-e-3',
-          status: 'completed'
+          status: 'completed',
+          width: 1024,
+          height: 1024,
+          steps: 50,
+          cfg_scale: 7.0
         });
 
       if (error) {
-        console.error('Error saving image generation:', error);
+        console.error('❌ Error saving image generation:', error);
       } else {
-        console.log('✅ Image generation saved to database');
+        console.log('✅ Image generation saved to database successfully');
       }
     } catch (error) {
-      console.error('Error saving image generation:', error);
+      console.error('❌ Error saving image generation:', error);
     }
   };
 

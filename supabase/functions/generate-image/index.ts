@@ -72,7 +72,8 @@ serve(async (req) => {
     const data = await response.json();
     console.log('✅ DALL·E 3 generation completed successfully:', {
       created: data.created,
-      data_length: data.data?.length
+      data_length: data.data?.length,
+      image_url: data.data?.[0]?.url ? data.data[0].url.substring(0, 50) + '...' : 'NO URL'
     });
 
     // Validate response structure
@@ -86,9 +87,16 @@ serve(async (req) => {
       throw new Error('No image URL returned from OpenAI API');
     }
 
-    console.log('✅ Image URL generated successfully:', data.data[0].url.substring(0, 50) + '...');
+    const imageUrl = data.data[0].url;
+    console.log('✅ Image URL generated successfully:', imageUrl);
 
-    return new Response(JSON.stringify(data), {
+    // Return the expected format for the frontend
+    return new Response(JSON.stringify({
+      status: 'success',
+      data: [{
+        url: imageUrl
+      }]
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
@@ -99,6 +107,7 @@ serve(async (req) => {
     });
     
     return new Response(JSON.stringify({ 
+      status: 'error',
       error: error.message,
       details: 'Check the function logs for more information'
     }), {
