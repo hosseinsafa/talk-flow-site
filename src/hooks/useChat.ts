@@ -1,4 +1,3 @@
-
 import { useState, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -46,9 +45,14 @@ export const useChat = () => {
   };
 
   const updateUsageCount = async () => {
-    if (!user) return;
+    if (!user) {
+      console.log('No user found, skipping usage count update');
+      return;
+    }
     
     try {
+      console.log('Updating usage count for user:', user.id);
+      
       const { error } = await supabase.functions.invoke('increment', {
         body: {
           table_name: 'user_usage',
@@ -58,10 +62,15 @@ export const useChat = () => {
       });
 
       if (error) {
-        console.error('Error updating usage:', error);
+        console.error('Error updating usage count:', error);
+        // Don't throw the error, just log it so chat continues to work
+        // even if usage tracking fails
+      } else {
+        console.log('✅ Usage count updated successfully');
       }
     } catch (error) {
-      console.error('Error updating usage:', error);
+      console.error('Error in updateUsageCount:', error);
+      // Don't throw the error, just log it
     }
   };
 

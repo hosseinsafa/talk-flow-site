@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -209,6 +208,8 @@ export const useImageGeneration = () => {
 
       if (error) {
         console.error('Error saving image generation:', error);
+      } else {
+        console.log('✅ Image generation saved to database');
       }
     } catch (error) {
       console.error('Error saving image generation:', error);
