@@ -161,7 +161,7 @@ export const useImageGeneration = () => {
 
   const generateImage = async (prompt: string) => {
     try {
-      console.log('🎨 Starting image generation process...');
+      console.log('🚀 === STARTING IMAGE GENERATION PROCESS ===');
       console.log('📝 Original prompt:', prompt);
       
       // Enhanced prompt for better results
@@ -169,7 +169,7 @@ export const useImageGeneration = () => {
       console.log('🚀 Enhanced prompt:', enhancedPrompt);
       
       console.log('📡 Calling generate-image function...');
-      const { data, error } = await supabase.functions.invoke('generate-image', {
+      const functionResponse = await supabase.functions.invoke('generate-image', {
         body: {
           prompt: enhancedPrompt,
           model: 'dall-e-3',
@@ -179,46 +179,69 @@ export const useImageGeneration = () => {
         }
       });
 
-      console.log('📊 Function response:', { data, error });
+      console.log('📊 Supabase function response:', {
+        data: functionResponse.data,
+        error: functionResponse.error,
+        hasData: !!functionResponse.data,
+        hasError: !!functionResponse.error
+      });
 
-      if (error) {
-        console.error('❌ Supabase function error:', error);
-        throw new Error(`Image generation failed: ${error.message}`);
+      if (functionResponse.error) {
+        console.error('❌ CRITICAL: Supabase function error:', functionResponse.error);
+        throw new Error(`Image generation failed: ${functionResponse.error.message}`);
       }
 
-      if (!data) {
-        console.error('❌ No data returned from function');
+      if (!functionResponse.data) {
+        console.error('❌ CRITICAL: No data returned from function');
         throw new Error('No response from image generation service');
       }
 
+      const responseData = functionResponse.data;
       console.log('📋 Response data structure:', {
-        status: data.status,
-        hasImageUrl: !!data.image_url,
-        imageUrl: data.image_url?.substring(0, 50) + '...'
+        status: responseData.status,
+        hasImageUrl: !!responseData.image_url,
+        imageUrl: responseData.image_url?.substring(0, 50) + '...',
+        fullResponse: JSON.stringify(responseData, null, 2)
       });
 
       // Check for successful response and extract image URL
-      if (data.status !== 'success') {
-        console.error('❌ Function returned error status:', data);
-        throw new Error(data.error || 'Image generation failed');
+      if (responseData.status !== 'success') {
+        console.error('❌ CRITICAL: Function returned error status:', responseData);
+        throw new Error(responseData.error || 'Image generation failed');
       }
 
-      if (!data.image_url) {
-        console.error('❌ No image_url in successful response:', data);
+      if (!responseData.image_url) {
+        console.error('❌ CRITICAL: No image_url in successful response:', responseData);
         throw new Error('No image URL returned from DALL·E 3');
       }
 
-      const imageUrl = data.image_url;
-      console.log('🖼️ Final image URL:', imageUrl);
+      const imageUrl = responseData.image_url;
+      console.log('🖼️ FINAL IMAGE URL EXTRACTED:', imageUrl);
+      
+      // Test the image URL before proceeding
+      console.log('🔍 Testing image URL before saving...');
+      try {
+        const imageTest = await fetch(imageUrl, { method: 'HEAD' });
+        console.log('✅ Image URL test result:', imageTest.status, imageTest.statusText);
+        if (!imageTest.ok) {
+          console.error('❌ Image URL is not accessible:', imageTest.status);
+        }
+      } catch (testError) {
+        console.error('⚠️ Image URL test failed:', testError.message);
+      }
       
       // Save to database
       await saveImageGeneration(prompt, imageUrl);
       
-      console.log('✅ Image generation completed successfully');
+      console.log('✅ === IMAGE GENERATION COMPLETED SUCCESSFULLY ===');
       return imageUrl;
       
     } catch (error) {
-      console.error('❌ Error in generateImage:', error);
+      console.error('❌ CRITICAL: Error in generateImage:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       throw error;
     }
   };

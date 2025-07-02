@@ -89,7 +89,7 @@ const StreamingChatInterface = () => {
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
 
-    console.log('📤 Sending message:', input.trim());
+    console.log('📤 === SENDING MESSAGE ===', input.trim());
 
     const userMessage: Message = {
       id: `user_${Date.now()}`,
@@ -125,11 +125,11 @@ const StreamingChatInterface = () => {
       console.log('🔍 Image request analysis:', imageRequest);
 
       if (isConfirmationMessage(currentInput)) {
-        console.log('🎯 Confirmation message detected');
+        console.log('🎯 === CONFIRMATION MESSAGE DETECTED ===');
         const pendingRequest = await getPendingImageRequest();
         
         if (pendingRequest) {
-          console.log('🎨 Processing confirmed image generation request');
+          console.log('🎨 === PROCESSING CONFIRMED IMAGE GENERATION ===');
           
           const loadingMessageId = `loading_${Date.now()}`;
           const loadingMessage: Message = {
@@ -139,15 +139,17 @@ const StreamingChatInterface = () => {
             timestamp: new Date(),
             isLoading: true
           };
+          
+          console.log('➕ Adding loading message:', loadingMessageId);
           addMessage(loadingMessage);
 
           try {
             console.log('🚀 Starting image generation for prompt:', pendingRequest.prompt);
             const imageUrl = await generateImage(pendingRequest.prompt);
-            console.log('✅ Image generated successfully:', imageUrl);
+            console.log('✅ Image generated successfully, URL:', imageUrl);
             
             if (!imageUrl) {
-              throw new Error('No image URL returned');
+              throw new Error('No image URL returned from generation');
             }
             
             const imageMessage: Message = {
@@ -161,17 +163,22 @@ const StreamingChatInterface = () => {
               isLoading: false
             };
 
-            console.log('🖼️ Updating message with image URL:', imageMessage);
+            console.log('🖼️ Updating message with image:', {
+              loadingId: loadingMessageId,
+              imageUrl: imageUrl,
+              messageId: imageMessage.id
+            });
+            
             updateMessage(loadingMessageId, imageMessage);
 
             await saveMessage(sessionId, imageMessage.content, 'assistant');
             await updateUsageCount();
             await markPendingRequestCompleted(pendingRequest.id);
 
-            console.log('🎉 Image generation completed and saved');
+            console.log('🎉 === IMAGE GENERATION COMPLETED AND SAVED ===');
 
           } catch (imageError) {
-            console.error('❌ Image generation error:', imageError);
+            console.error('❌ CRITICAL: Image generation error:', imageError);
             
             const errorMessage: Message = {
               id: `error_${Date.now()}`,
@@ -192,7 +199,7 @@ const StreamingChatInterface = () => {
         }
       }
       else if (imageRequest.isRequest) {
-        console.log('🎨 Image generation request detected');
+        console.log('🎨 === IMAGE GENERATION REQUEST DETECTED ===');
         
         let confirmationMessage: string;
         
@@ -226,7 +233,7 @@ const StreamingChatInterface = () => {
         addMessage(confirmationResponse);
         await saveMessage(sessionId, confirmationResponse.content, 'assistant');
       } else {
-        console.log('💬 Starting text response streaming');
+        console.log('💬 === STARTING TEXT RESPONSE STREAMING ===');
         await streamChatResponse([...messages, userMessage], sessionId, selectedModel, setMessages, setStreamingMessageId, abortControllerRef, saveMessage, updateUsageCount);
       }
 
@@ -234,7 +241,7 @@ const StreamingChatInterface = () => {
       await loadChatSessions();
 
     } catch (error) {
-      console.error('❌ Error in sendMessage:', error);
+      console.error('❌ CRITICAL: Error in sendMessage:', error);
       const userLanguage = detectLanguage(currentInput);
       const errorText = userLanguage === 'persian' 
         ? 'ارسال پیام با مشکل مواجه شد. لطفاً دوباره تلاش کنید.'
