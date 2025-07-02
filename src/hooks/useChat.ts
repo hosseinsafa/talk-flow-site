@@ -11,6 +11,7 @@ export interface Message {
   timestamp: Date;
   imageUrl?: string;
   isStreaming?: boolean;
+  isLoading?: boolean;
 }
 
 export interface ChatSession {

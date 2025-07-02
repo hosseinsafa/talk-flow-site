@@ -6,6 +6,7 @@ import TypingIndicator from './TypingIndicator';
 import ChatHeader from './ChatHeader';
 import ChatInput from './ChatInput';
 import EmptyState from './EmptyState';
+import ImageGenerationLoader from './ImageGenerationLoader';
 import { useChat, Message } from '@/hooks/useChat';
 import { useChatSessions } from '@/hooks/useChatSessions';
 import { useImageGeneration } from '@/hooks/useImageGeneration';
@@ -129,16 +130,20 @@ const StreamingChatInterface = () => {
         if (pendingRequest) {
           console.log('🎨 Processing confirmed image generation request');
           
+          const loadingMessageId = `loading_${Date.now()}`;
           const loadingMessage: Message = {
-            id: `loading_${Date.now()}`,
+            id: loadingMessageId,
             content: userLanguage === 'persian' ? 'در حال ساخت تصویر...' : 'Generating image...',
             role: 'assistant',
-            timestamp: new Date()
+            timestamp: new Date(),
+            isLoading: true
           };
           addMessage(loadingMessage);
 
           try {
+            console.log('🚀 Starting image generation for prompt:', pendingRequest.prompt);
             const imageUrl = await generateImage(pendingRequest.prompt);
+            console.log('✅ Image generated successfully:', imageUrl);
             
             const imageMessage: Message = {
               id: `img_${Date.now()}`,
@@ -151,7 +156,7 @@ const StreamingChatInterface = () => {
             };
 
             setMessages(prev => prev.map(msg => 
-              msg.id === loadingMessage.id ? imageMessage : msg
+              msg.id === loadingMessageId ? imageMessage : msg
             ));
 
             await saveMessage(sessionId, imageMessage.content, 'assistant');
@@ -164,14 +169,14 @@ const StreamingChatInterface = () => {
             const errorMessage: Message = {
               id: `error_${Date.now()}`,
               content: userLanguage === 'persian'
-                ? `متاسفم، نتونستم تصویر رو بسازم. خطا: ${imageError.message}`
-                : `Sorry, I couldn't generate the image. Error: ${imageError.message}`,
+                ? 'متأسفم، مشکلی در ساخت تصویر پیش آمد. لطفاً دوباره تلاش کنید.'
+                : `Sorry, I couldn't generate the image. Please try again.`,
               role: 'assistant',
               timestamp: new Date()
             };
 
             setMessages(prev => prev.map(msg => 
-              msg.id === loadingMessage.id ? errorMessage : msg
+              msg.id === loadingMessageId ? errorMessage : msg
             ));
 
             await saveMessage(sessionId, errorMessage.content, 'assistant');
@@ -225,9 +230,13 @@ const StreamingChatInterface = () => {
 
     } catch (error) {
       console.error('❌ Error in sendMessage:', error);
+      const errorText = userLanguage === 'persian' 
+        ? 'ارسال پیام با مشکل مواجه شد. لطفاً دوباره تلاش کنید.'
+        : 'Failed to send message. Please try again.';
+      
       toast({
-        title: "خطا",
-        description: "ارسال پیام با مشکل مواجه شد. لطفاً دوباره تلاش کنید.",
+        title: userLanguage === 'persian' ? "خطا" : "Error",
+        description: errorText,
         variant: "destructive"
       });
     } finally {
@@ -264,7 +273,24 @@ const StreamingChatInterface = () => {
           ) : (
             <>
               {messages.map((message) => (
-                <ChatMessage key={message.id} message={message} />
+                <div key={message.id}>
+                  {message.isLoading ? (
+                    <div className="bg-[#2f2f2f]">
+                      <div className="max-w-4xl mx-auto px-6 py-6 flex gap-6">
+                        <div className="flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-[#19c37d] text-white flex items-center justify-center text-sm font-medium">
+                            AI
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <ImageGenerationLoader message={message.content} />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <ChatMessage message={message} />
+                  )}
+                </div>
               ))}
               {streamingMessageId && <TypingIndicator />}
             </>

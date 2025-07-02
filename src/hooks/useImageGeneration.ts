@@ -167,23 +167,24 @@ export const useImageGeneration = () => {
         body: {
           prompt: prompt,
           model: 'dall-e-3',
-          size: '1024x1792',
+          size: '1024x1024',
           quality: 'hd',
           n: 1
         }
       });
 
       if (error) {
-        console.error('❌ Error calling generate-image:', error);
-        throw new Error(error.message);
+        console.error('❌ Error calling generate-image function:', error);
+        throw new Error(`Image generation failed: ${error.message}`);
       }
 
       console.log('✅ DALL·E 3 generation completed:', data);
       
-      if (data.data && data.data[0] && data.data[0].url) {
+      if (data?.data?.[0]?.url) {
         await saveImageGeneration(prompt, data.data[0].url);
         return data.data[0].url;
       } else {
+        console.error('❌ No image URL in response:', data);
         throw new Error('No image URL returned from DALL·E 3');
       }
     } catch (error) {
