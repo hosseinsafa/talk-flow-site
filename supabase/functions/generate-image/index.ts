@@ -10,7 +10,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  console.log('=== Image generation request received ===');
+  console.log('=== Image generation request started ===');
   
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -19,27 +19,31 @@ serve(async (req) => {
   }
 
   try {
+    console.log('🔑 Checking OpenAI API key...');
     if (!openAIApiKey) {
       console.error('❌ OpenAI API key not found in environment variables');
       throw new Error('OpenAI API key not configured');
     }
+    console.log('✅ OpenAI API key found');
 
-    const { prompt, model = 'dall-e-3', n = 1, size = '1024x1024', quality = 'hd' } = await req.json();
-
-    console.log('🎨 Image generation request details:', {
-      model,
-      size,
-      quality,
-      prompt: prompt?.substring(0, 100) + '...'
-    });
+    const requestBody = await req.json();
+    console.log('📥 Request body received:', JSON.stringify(requestBody, null, 2));
+    
+    const { prompt, model = 'dall-e-3', n = 1, size = '1024x1024', quality = 'hd' } = requestBody;
 
     if (!prompt) {
       console.error('❌ No prompt provided');
       throw new Error('Prompt is required for image generation');
     }
 
-    console.log('🚀 Making request to OpenAI DALL·E 3 API...');
+    console.log('🎨 Starting DALL·E 3 image generation with params:', {
+      model,
+      size,
+      quality,
+      prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : '')
+    });
 
+    console.log('🚀 Making request to OpenAI API...');
     const response = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
       headers: {
@@ -58,59 +62,77 @@ serve(async (req) => {
     console.log('📡 OpenAI API response status:', response.status, response.statusText);
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => null);
-      console.error('❌ OpenAI API error response:', {
+      const errorText = await response.text();
+      console.error('❌ OpenAI API error:', {
         status: response.status,
         statusText: response.statusText,
-        error: errorData
+        error: errorText
       });
       
-      const errorMessage = errorData?.error?.message || `HTTP ${response.status}: ${response.statusText}`;
-      throw new Error(`OpenAI API error: ${errorMessage}`);
+      throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
-    console.log('✅ DALL·E 3 generation completed successfully:', {
-      created: data.created,
-      data_length: data.data?.length,
-      image_url: data.data?.[0]?.url ? data.data[0].url.substring(0, 50) + '...' : 'NO URL'
+    console.log('📊 OpenAI API response data structure:', {
+      hasData: !!data.data,
+      dataLength: data.data?.length,
+      hasUrl: !!data.data?.[0]?.url,
+      created: data.created
     });
+
+    // Log the actual URL for debugging
+    if (data.data?.[0]?.url) {
+      console.log('🖼️ Generated image URL:', data.data[0].url);
+    } else {
+      console.error('❌ No image URL in response:', JSON.stringify(data, null, 2));
+    }
 
     // Validate response structure
     if (!data.data || !Array.isArray(data.data) || data.data.length === 0) {
-      console.error('❌ Invalid response structure from OpenAI:', data);
+      console.error('❌ Invalid response structure:', data);
       throw new Error('Invalid response format from OpenAI API');
     }
 
     if (!data.data[0].url) {
-      console.error('❌ No image URL in OpenAI response:', data.data[0]);
+      console.error('❌ No image URL in response data:', data.data[0]);
       throw new Error('No image URL returned from OpenAI API');
     }
 
     const imageUrl = data.data[0].url;
-    console.log('✅ Image URL generated successfully:', imageUrl);
+    console.log('✅ Image generation completed successfully');
+    console.log('🔗 Final image URL:', imageUrl);
 
-    // Return the expected format for the frontend
-    return new Response(JSON.stringify({
+    // Return consistent format
+    const responsePayload = {
       status: 'success',
       data: [{
         url: imageUrl
-      }]
-    }), {
+      }],
+      image_url: imageUrl // Also include direct access
+    };
+
+    console.log('📤 Sending response:', JSON.stringify(responsePayload, null, 2));
+
+    return new Response(JSON.stringify(responsePayload), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
     console.error('❌ Error in generate-image function:', {
       message: error.message,
-      stack: error.stack
+      stack: error.stack,
+      name: error.name
     });
     
-    return new Response(JSON.stringify({ 
+    const errorResponse = { 
       status: 'error',
       error: error.message,
       details: 'Check the function logs for more information'
-    }), {
+    };
+
+    console.log('📤 Sending error response:', JSON.stringify(errorResponse, null, 2));
+    
+    return new Response(JSON.stringify(errorResponse), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
