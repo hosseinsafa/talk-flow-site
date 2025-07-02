@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -15,7 +14,7 @@ import {
   History,
   ChevronDown,
   ChevronUp,
-  AspectRatio as AspectRatioIcon
+  Maximize
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -346,7 +345,7 @@ const ImageGeneration = () => {
           {/* Aspect Ratio Selector */}
           <div className="mb-6">
             <Label className="text-gray-300 text-sm mb-2 block flex items-center">
-              <AspectRatioIcon className="w-4 h-4 mr-2" />
+              <Maximize className="w-4 h-4 mr-2" />
               انتخاب نسبت تصویر
             </Label>
             <Select value={settings.aspect_ratio} onValueChange={handleAspectRatioChange}>
