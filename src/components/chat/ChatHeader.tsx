@@ -31,6 +31,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({ selectedModel, setSelectedModel
             <SelectValue />
           </SelectTrigger>
           <SelectContent className="bg-[#2f2f2f] border-white/20 text-white">
+            <SelectItem value="gpt-4o-mini" title="Fast and cost-effective GPT-4o variant for chat">GPT-4o Mini</SelectItem>
             <SelectItem value="gpt-4o">GPT-4o</SelectItem>
             <SelectItem value="gpt-4-turbo">GPT-4 Turbo</SelectItem>
             <SelectItem value="gpt-3.5-turbo">GPT-3.5</SelectItem>

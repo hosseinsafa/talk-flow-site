@@ -13,7 +13,7 @@ import { useStreamingChat } from '@/hooks/useStreamingChat';
 
 const StreamingChatInterface = () => {
   const [input, setInput] = useState('');
-  const [selectedModel, setSelectedModel] = useState('gpt-4o');
+  const [selectedModel, setSelectedModel] = useState('gpt-4o-mini'); // Default to GPT-4o Mini
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);

@@ -16,7 +16,7 @@ export const useStreamingChat = () => {
     let streamingId: string | null = null;
     
     try {
-      console.log('🚀 Starting streaming chat request...');
+      console.log('🚀 Starting streaming chat request with model:', selectedModel);
       
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
@@ -34,7 +34,7 @@ export const useStreamingChat = () => {
             role: msg.role,
             content: msg.content
           })),
-          model: selectedModel,
+          model: selectedModel, // Use the selected model
           max_tokens: 2000,
           temperature: 0.7
         }),
