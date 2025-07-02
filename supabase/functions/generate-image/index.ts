@@ -9,10 +9,69 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const enhancePrompt = (originalPrompt: string): string => {
+  const lowerPrompt = originalPrompt.toLowerCase();
+  
+  // Check if prompt already has quality keywords
+  const hasQualityKeywords = [
+    'highly detailed', 'ultra realistic', 'cinematic lighting', 'professional photography',
+    'detailed', 'realistic', 'high quality', 'hd', '8k', 'professional'
+  ].some(keyword => lowerPrompt.includes(keyword));
+  
+  if (hasQualityKeywords) {
+    return originalPrompt;
+  }
+  
+  // Add quality enhancement
+  return `${originalPrompt}, highly detailed, ultra realistic, cinematic lighting, professional photography, 8K quality`;
+};
+
+const generateSingleImage = async (prompt: string): Promise<string | null> => {
+  try {
+    console.log('🎨 Generating single image with enhanced prompt:', prompt.substring(0, 100) + '...');
+    
+    const response = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAIApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'dall-e-3',
+        prompt: prompt,
+        n: 1,
+        size: '1792x1024',
+        quality: 'hd',
+        style: 'vivid'
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ OpenAI API error for single generation:', response.status, errorText);
+      return null;
+    }
+
+    const data = await response.json();
+    
+    if (!data.data || !data.data[0] || !data.data[0].url) {
+      console.error('❌ Invalid response structure for single generation');
+      return null;
+    }
+
+    const imageUrl = data.data[0].url;
+    console.log('✅ Single image generated successfully');
+    return imageUrl;
+    
+  } catch (error) {
+    console.error('❌ Error in single image generation:', error);
+    return null;
+  }
+};
+
 serve(async (req) => {
-  console.log('🚀 === GENERATE IMAGE FUNCTION CALLED ===');
+  console.log('🚀 === ENHANCED GENERATE IMAGE FUNCTION CALLED ===');
   console.log('🔍 Request method:', req.method);
-  console.log('🔍 Request URL:', req.url);
   
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -26,102 +85,86 @@ serve(async (req) => {
       console.error('❌ CRITICAL: OpenAI API key not found in environment variables');
       throw new Error('OpenAI API key not configured');
     }
-    console.log('✅ OpenAI API key found:', openAIApiKey ? 'YES' : 'NO');
+    console.log('✅ OpenAI API key found');
 
     console.log('📥 Reading request body...');
     const requestBody = await req.json();
-    console.log('📊 Full request body:', JSON.stringify(requestBody, null, 2));
+    console.log('📊 Request body received:', JSON.stringify(requestBody, null, 2));
     
-    const { prompt, model = 'dall-e-3', n = 1, size = '1024x1024', quality = 'hd' } = requestBody;
+    const { prompt } = requestBody;
 
     if (!prompt) {
       console.error('❌ CRITICAL: No prompt provided in request');
       throw new Error('Prompt is required for image generation');
     }
 
-    console.log('🎨 Image generation parameters:', {
-      prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
-      model,
-      size,
-      quality,
-      n
+    // Enhance the prompt for better quality
+    const enhancedPrompt = enhancePrompt(prompt);
+    console.log('🎯 Enhanced prompt:', enhancedPrompt);
+
+    console.log('🚀 Starting parallel image generation (Best of 4)...');
+    
+    // Generate 4 images in parallel
+    const generationPromises = Array(4).fill(null).map((_, index) => {
+      console.log(`🎨 Starting generation ${index + 1}/4`);
+      return generateSingleImage(enhancedPrompt);
     });
 
-    console.log('🚀 Making OpenAI API request...');
-    const openAIResponse = await fetch('https://api.openai.com/v1/images/generations', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openAIApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        prompt,
-        n,
-        size,
-        quality
-      }),
+    // Wait for all generations to complete
+    console.log('⏳ Waiting for all 4 generations to complete...');
+    const results = await Promise.allSettled(generationPromises);
+    
+    // Extract successful URLs
+    const imageUrls: string[] = [];
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled' && result.value) {
+        console.log(`✅ Generation ${index + 1}/4 successful`);
+        imageUrls.push(result.value);
+      } else {
+        console.log(`❌ Generation ${index + 1}/4 failed:`, result.status === 'rejected' ? result.reason : 'No URL returned');
+      }
     });
 
-    console.log('📡 OpenAI API response status:', openAIResponse.status, openAIResponse.statusText);
-
-    if (!openAIResponse.ok) {
-      const errorText = await openAIResponse.text();
-      console.error('❌ CRITICAL: OpenAI API error:', {
-        status: openAIResponse.status,
-        statusText: openAIResponse.statusText,
-        error: errorText
-      });
-      
-      throw new Error(`OpenAI API error: ${openAIResponse.status} - ${errorText}`);
+    if (imageUrls.length === 0) {
+      console.error('❌ CRITICAL: All 4 generations failed');
+      throw new Error('All image generation attempts failed');
     }
 
-    const openAIData = await openAIResponse.json();
-    console.log('📊 OpenAI response structure:', {
-      hasData: !!openAIData.data,
-      dataLength: openAIData.data?.length,
-      hasUrl: !!openAIData.data?.[0]?.url,
-      created: openAIData.created,
-      fullResponse: JSON.stringify(openAIData, null, 2)
-    });
+    console.log(`🎉 Successfully generated ${imageUrls.length}/4 images`);
 
-    // Validate response structure
-    if (!openAIData.data || !Array.isArray(openAIData.data) || openAIData.data.length === 0) {
-      console.error('❌ CRITICAL: Invalid OpenAI response structure:', openAIData);
-      throw new Error('Invalid response format from OpenAI API');
-    }
+    // For Phase 1: Return the first successful image as primary
+    const primaryImageUrl = imageUrls[0];
+    console.log('🖼️ Primary image URL:', primaryImageUrl);
 
-    if (!openAIData.data[0].url) {
-      console.error('❌ CRITICAL: No image URL in OpenAI response:', openAIData.data[0]);
-      throw new Error('No image URL returned from OpenAI API');
-    }
-
-    const imageUrl = openAIData.data[0].url;
-    console.log('🖼️ Generated image URL:', imageUrl);
-
-    // Test if image URL is accessible
-    console.log('🔍 Testing image URL accessibility...');
+    // Test if primary image URL is accessible
+    console.log('🔍 Testing primary image URL accessibility...');
     try {
-      const imageTestResponse = await fetch(imageUrl, { method: 'HEAD' });
-      console.log('✅ Image URL test result:', imageTestResponse.status, imageTestResponse.statusText);
+      const imageTestResponse = await fetch(primaryImageUrl, { method: 'HEAD' });
+      console.log('✅ Primary image URL test result:', imageTestResponse.status, imageTestResponse.statusText);
     } catch (urlError) {
-      console.error('⚠️ Image URL test failed:', urlError.message);
+      console.error('⚠️ Primary image URL test failed:', urlError.message);
     }
 
-    // Return standardized format
+    // Return enhanced response format
     const responsePayload = {
       status: 'success',
-      image_url: imageUrl
+      image_url: primaryImageUrl, // Primary image for backward compatibility
+      image_urls: imageUrls, // All generated images for future selection
+      generation_count: imageUrls.length,
+      enhanced_prompt: enhancedPrompt
     };
 
-    console.log('📤 Sending final response:', JSON.stringify(responsePayload, null, 2));
+    console.log('📤 Sending enhanced response:', JSON.stringify({
+      ...responsePayload,
+      image_urls: imageUrls.map(url => url.substring(0, 50) + '...')
+    }, null, 2));
 
     return new Response(JSON.stringify(responsePayload), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
-    console.error('❌ CRITICAL: Error in generate-image function:', {
+    console.error('❌ CRITICAL: Error in enhanced generate-image function:', {
       message: error.message,
       stack: error.stack,
       name: error.name

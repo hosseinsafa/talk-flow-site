@@ -3,6 +3,15 @@ import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 
+interface ImageGenerationResponse {
+  status: 'success' | 'error';
+  image_url?: string;
+  image_urls?: string[];
+  generation_count?: number;
+  enhanced_prompt?: string;
+  error?: string;
+}
+
 export const useImageGeneration = () => {
   const { user } = useAuth();
 
@@ -58,21 +67,17 @@ export const useImageGeneration = () => {
 
   const generateImage = async (prompt: string) => {
     try {
-      console.log('🚀 === STARTING IMAGE GENERATION ===');
-      console.log('📝 Prompt:', prompt);
+      console.log('🚀 === STARTING ENHANCED IMAGE GENERATION ===');
+      console.log('📝 Original prompt:', prompt);
       
-      console.log('📡 Calling generate-image function...');
+      console.log('📡 Calling enhanced generate-image function...');
       const functionResponse = await supabase.functions.invoke('generate-image', {
         body: {
-          prompt: prompt,
-          model: 'dall-e-3',
-          size: '1024x1024',
-          quality: 'hd',
-          n: 1
+          prompt: prompt
         }
       });
 
-      console.log('📊 Function response:', {
+      console.log('📊 Enhanced function response:', {
         data: functionResponse.data,
         error: functionResponse.error,
         hasData: !!functionResponse.data,
@@ -85,46 +90,67 @@ export const useImageGeneration = () => {
       }
 
       if (!functionResponse.data) {
-        console.error('❌ No data returned from function');
-        throw new Error('No response from image generation service');
+        console.error('❌ No data returned from enhanced function');
+        throw new Error('No response from enhanced image generation service');
       }
 
-      const responseData = functionResponse.data;
-      console.log('📋 Response data:', responseData);
+      const responseData: ImageGenerationResponse = functionResponse.data;
+      console.log('📋 Enhanced response data:', responseData);
 
       if (responseData.status !== 'success') {
         console.error('❌ Function returned error status:', responseData);
-        throw new Error(responseData.error || 'Image generation failed');
+        throw new Error(responseData.error || 'Enhanced image generation failed');
       }
 
       if (!responseData.image_url) {
-        console.error('❌ No image_url in response:', responseData);
-        throw new Error('No image URL returned from DALL·E 3');
+        console.error('❌ No primary image_url in enhanced response:', responseData);
+        throw new Error('No primary image URL returned from enhanced DALL·E 3');
       }
 
-      const imageUrl = responseData.image_url;
-      console.log('🖼️ Image URL:', imageUrl);
+      const primaryImageUrl = responseData.image_url;
+      const allImageUrls = responseData.image_urls || [primaryImageUrl];
+      const generationCount = responseData.generation_count || 1;
+      const enhancedPrompt = responseData.enhanced_prompt || prompt;
       
-      // Save to database
-      await saveImageGeneration(prompt, imageUrl);
+      console.log('🖼️ Enhanced generation results:', {
+        primaryImageUrl: primaryImageUrl.substring(0, 50) + '...',
+        totalGenerated: generationCount,
+        allUrls: allImageUrls.length,
+        enhancedPrompt: enhancedPrompt.substring(0, 100) + '...'
+      });
       
-      console.log('✅ === IMAGE GENERATION COMPLETED ===');
-      return imageUrl;
+      // Save to database with enhanced information
+      await saveImageGeneration(enhancedPrompt, primaryImageUrl, {
+        generation_count: generationCount,
+        all_urls: allImageUrls
+      });
+      
+      console.log('✅ === ENHANCED IMAGE GENERATION COMPLETED ===');
+      return primaryImageUrl;
       
     } catch (error) {
-      console.error('❌ Error in generateImage:', error);
+      console.error('❌ Error in enhanced generateImage:', error);
       throw error;
     }
   };
 
-  const saveImageGeneration = async (prompt: string, imageUrl: string) => {
+  const saveImageGeneration = async (
+    prompt: string, 
+    imageUrl: string, 
+    metadata?: { generation_count?: number; all_urls?: string[] }
+  ) => {
     if (!user) {
       console.log('⚠️ No user found, skipping database save');
       return;
     }
 
     try {
-      console.log('💾 Saving image generation to database...');
+      console.log('💾 Saving enhanced image generation to database...');
+      
+      // Create enhanced prompt note for database
+      const promptNote = metadata?.generation_count 
+        ? `Enhanced generation (${metadata.generation_count} images generated)`
+        : 'Single generation';
       
       const { data, error } = await supabase
         .from('image_generations')
@@ -132,12 +158,19 @@ export const useImageGeneration = () => {
           user_id: user.id,
           prompt: prompt,
           image_url: imageUrl,
-          model_type: 'dall-e-3',
+          model_type: 'dall-e-3-enhanced',
           status: 'completed',
-          width: 1024,
+          width: 1792,
           height: 1024,
           steps: 50,
-          cfg_scale: 7.0
+          cfg_scale: 7.0,
+          // Store metadata in error_message field as JSON string for now
+          error_message: metadata ? JSON.stringify({
+            type: 'metadata',
+            generation_count: metadata.generation_count,
+            all_urls_count: metadata.all_urls?.length,
+            note: promptNote
+          }) : null
         })
         .select()
         .single();
@@ -147,10 +180,10 @@ export const useImageGeneration = () => {
         throw error;
       }
 
-      console.log('✅ Image generation saved:', data.id);
+      console.log('✅ Enhanced image generation saved:', data.id);
       return data;
     } catch (error) {
-      console.error('❌ Error saving image generation:', error);
+      console.error('❌ Error saving enhanced image generation:', error);
       throw error;
     }
   };
