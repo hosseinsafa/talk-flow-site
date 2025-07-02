@@ -8,6 +8,7 @@ interface Message {
   timestamp?: Date;
   imageUrl?: string;
   isStreaming?: boolean;
+  isLoading?: boolean;
 }
 
 interface ChatMessageProps {
@@ -27,26 +28,25 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
   const hasPersianText = containsPersian(message.content);
   
   const handleImageLoad = () => {
-    console.log('✅ Image loaded successfully in ChatMessage:', message.imageUrl);
+    console.log('✅ Image loaded successfully:', message.imageUrl);
     setImageLoading(false);
   };
 
   const handleImageError = () => {
-    console.error('❌ Failed to load image in ChatMessage:', message.imageUrl);
+    console.error('❌ Failed to load image:', message.imageUrl);
     setImageError(true);
     setImageLoading(false);
   };
 
-  // Debug logging - moved outside JSX
+  // Debug logging
   console.log('🔍 ChatMessage render:', {
     messageId: message.id,
     hasImageUrl: !!message.imageUrl,
     imageUrl: message.imageUrl?.substring(0, 50) + '...',
-    isLoading: imageLoading,
+    isLoading: message.isLoading,
     hasError: imageError
   });
 
-  // Additional debug log for image rendering - moved outside JSX
   if (message.imageUrl) {
     console.log('🖼️ Rendering image section for:', message.imageUrl);
   }
@@ -75,8 +75,22 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
             </div>
           </div>
           
+          {/* Loading state for image generation */}
+          {message.isLoading && (
+            <div className="mt-4 animate-scale-in">
+              <div className="bg-gray-600 rounded-xl animate-pulse flex items-center justify-center" style={{ width: '400px', height: '300px' }}>
+                <div className="flex flex-col items-center text-gray-300">
+                  <div className="w-8 h-8 border-2 border-gray-300 border-t-transparent rounded-full animate-spin mb-2"></div>
+                  <span className="text-sm">
+                    {hasPersianText ? 'در حال ساخت تصویر...' : 'Generating image...'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+          
           {/* Display generated image if available */}
-          {message.imageUrl && (
+          {message.imageUrl && !message.isLoading && (
             <div className="mt-4 animate-scale-in">
               {imageLoading && !imageError && (
                 <div className="bg-gray-600 rounded-xl animate-pulse flex items-center justify-center" style={{ width: '400px', height: '300px' }}>
@@ -96,7 +110,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.996-.833-2.768 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
                     </svg>
                     <span className="text-sm">
-                      {hasPersianText ? 'متأسفم، مشکلی در بارگذاری تصویر پیش آمد. لطفاً دوباره تلاش کنید.' : 'Sorry, failed to load image. Please try again.'}
+                      {hasPersianText ? 'متأسفم، مشکلی در بارگذاری تصویر پیش آمد.' : 'Sorry, failed to load image.'}
                     </span>
                   </div>
                 </div>

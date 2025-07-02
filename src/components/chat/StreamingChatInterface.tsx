@@ -6,7 +6,6 @@ import TypingIndicator from './TypingIndicator';
 import ChatHeader from './ChatHeader';
 import ChatInput from './ChatInput';
 import EmptyState from './EmptyState';
-import ImageGenerationLoader from './ImageGenerationLoader';
 import { useChat, Message } from '@/hooks/useChat';
 import { useChatSessions } from '@/hooks/useChatSessions';
 import { useImageGeneration } from '@/hooks/useImageGeneration';
@@ -51,10 +50,6 @@ const StreamingChatInterface = () => {
   const {
     detectLanguage,
     isImageGenerationRequest,
-    isConfirmationMessage,
-    savePendingImageRequest,
-    getPendingImageRequest,
-    markPendingRequestCompleted,
     generateImage
   } = useImageGeneration();
 
@@ -119,119 +114,75 @@ const StreamingChatInterface = () => {
       await saveMessage(sessionId, currentInput, 'user');
 
       const userLanguage = detectLanguage(currentInput);
-      const imageRequest = isImageGenerationRequest(currentInput);
-
-      console.log('🔍 Language detected:', userLanguage);
-      console.log('🔍 Image request analysis:', imageRequest);
-
-      if (isConfirmationMessage(currentInput)) {
-        console.log('🎯 === CONFIRMATION MESSAGE DETECTED ===');
-        const pendingRequest = await getPendingImageRequest();
-        
-        if (pendingRequest) {
-          console.log('🎨 === PROCESSING CONFIRMED IMAGE GENERATION ===');
-          
-          const loadingMessageId = `loading_${Date.now()}`;
-          const loadingMessage: Message = {
-            id: loadingMessageId,
-            content: userLanguage === 'persian' ? 'در حال ساخت تصویر...' : 'Generating image...',
-            role: 'assistant',
-            timestamp: new Date(),
-            isLoading: true
-          };
-          
-          console.log('➕ Adding loading message:', loadingMessageId);
-          addMessage(loadingMessage);
-
-          try {
-            console.log('🚀 Starting image generation for prompt:', pendingRequest.prompt);
-            const imageUrl = await generateImage(pendingRequest.prompt);
-            console.log('✅ Image generated successfully, URL:', imageUrl);
-            
-            if (!imageUrl) {
-              throw new Error('No image URL returned from generation');
-            }
-            
-            const imageMessage: Message = {
-              id: `img_${Date.now()}`,
-              content: userLanguage === 'persian' 
-                ? `تصویر بر اساس "${pendingRequest.prompt}" ساخته شد`
-                : `Generated image based on: "${pendingRequest.prompt}"`,
-              role: 'assistant',
-              timestamp: new Date(),
-              imageUrl: imageUrl,
-              isLoading: false
-            };
-
-            console.log('🖼️ Updating message with image:', {
-              loadingId: loadingMessageId,
-              imageUrl: imageUrl,
-              messageId: imageMessage.id
-            });
-            
-            updateMessage(loadingMessageId, imageMessage);
-
-            await saveMessage(sessionId, imageMessage.content, 'assistant');
-            await updateUsageCount();
-            await markPendingRequestCompleted(pendingRequest.id);
-
-            console.log('🎉 === IMAGE GENERATION COMPLETED AND SAVED ===');
-
-          } catch (imageError) {
-            console.error('❌ CRITICAL: Image generation error:', imageError);
-            
-            const errorMessage: Message = {
-              id: `error_${Date.now()}`,
-              content: userLanguage === 'persian'
-                ? 'متأسفم، مشکلی در ساخت تصویر پیش آمد. لطفاً دوباره تلاش کنید.'
-                : `Sorry, I couldn't generate the image. Please try again.`,
-              role: 'assistant',
-              timestamp: new Date(),
-              isLoading: false
-            };
-
-            updateMessage(loadingMessageId, errorMessage);
-            await saveMessage(sessionId, errorMessage.content, 'assistant');
-          }
-        } else {
-          console.log('💬 No pending image request, processing as normal chat');
-          await streamChatResponse([...messages, userMessage], sessionId, selectedModel, setMessages, setStreamingMessageId, abortControllerRef, saveMessage, updateUsageCount);
-        }
-      }
-      else if (imageRequest.isRequest) {
+      
+      // Check if this is an image generation request
+      if (isImageGenerationRequest(currentInput)) {
         console.log('🎨 === IMAGE GENERATION REQUEST DETECTED ===');
         
-        let confirmationMessage: string;
-        
-        if (userLanguage === 'persian') {
-          if (imageRequest.hasSpecificObject && imageRequest.object) {
-            confirmationMessage = `بله، می‌تونم تصویر '${imageRequest.object}' رو بسازم. آیا تأیید می‌کنید که تصویر ساخته شود؟`;
-          } else {
-            confirmationMessage = 'بله، می‌تونم تصویر بسازم. چه تصویری نیاز دارید؟ لطفاً مشخص کنید تا تأیید کنم.';
-          }
-        } else {
-          if (imageRequest.hasSpecificObject && imageRequest.object) {
-            confirmationMessage = `Yes, I can generate an image of '${imageRequest.object}'. Do you confirm to proceed with generating the image?`;
-          } else {
-            confirmationMessage = 'Yes, I can generate an image. What image would you like me to generate? Please specify so I can confirm.';
-          }
-        }
-
-        if (imageRequest.hasSpecificObject && imageRequest.object) {
-          await savePendingImageRequest(sessionId, imageRequest.object);
-        } else {
-          await savePendingImageRequest(sessionId, currentInput);
-        }
-        
-        const confirmationResponse: Message = {
-          id: `confirm_${Date.now()}`,
-          content: confirmationMessage,
+        // Add loading message
+        const loadingMessageId = `loading_${Date.now()}`;
+        const loadingMessage: Message = {
+          id: loadingMessageId,
+          content: userLanguage === 'persian' 
+            ? 'در حال ساخت تصویر برای شما...' 
+            : 'Generating image for you...',
           role: 'assistant',
-          timestamp: new Date()
+          timestamp: new Date(),
+          isLoading: true
         };
+        
+        console.log('➕ Adding loading message:', loadingMessageId);
+        addMessage(loadingMessage);
 
-        addMessage(confirmationResponse);
-        await saveMessage(sessionId, confirmationResponse.content, 'assistant');
+        try {
+          console.log('🚀 Starting image generation for prompt:', currentInput);
+          const imageUrl = await generateImage(currentInput);
+          console.log('✅ Image generated successfully, URL:', imageUrl);
+          
+          if (!imageUrl) {
+            throw new Error('No image URL returned from generation');
+          }
+          
+          const imageMessage: Message = {
+            id: `img_${Date.now()}`,
+            content: userLanguage === 'persian' 
+              ? `تصویر مورد نظر شما ساخته شد`
+              : `Here's the image you requested`,
+            role: 'assistant',
+            timestamp: new Date(),
+            imageUrl: imageUrl,
+            isLoading: false
+          };
+
+          console.log('🖼️ Updating message with image:', {
+            loadingId: loadingMessageId,
+            imageUrl: imageUrl,
+            messageId: imageMessage.id
+          });
+          
+          updateMessage(loadingMessageId, imageMessage);
+
+          await saveMessage(sessionId, imageMessage.content, 'assistant');
+          await updateUsageCount();
+
+          console.log('🎉 === IMAGE GENERATION COMPLETED ===');
+
+        } catch (imageError) {
+          console.error('❌ Image generation error:', imageError);
+          
+          const errorMessage: Message = {
+            id: `error_${Date.now()}`,
+            content: userLanguage === 'persian'
+              ? 'متأسفم، مشکلی در ساخت تصویر پیش آمد. لطفاً دوباره تلاش کنید.'
+              : `Sorry, I couldn't generate the image. Please try again.`,
+            role: 'assistant',
+            timestamp: new Date(),
+            isLoading: false
+          };
+
+          updateMessage(loadingMessageId, errorMessage);
+          await saveMessage(sessionId, errorMessage.content, 'assistant');
+        }
       } else {
         console.log('💬 === STARTING TEXT RESPONSE STREAMING ===');
         await streamChatResponse([...messages, userMessage], sessionId, selectedModel, setMessages, setStreamingMessageId, abortControllerRef, saveMessage, updateUsageCount);
@@ -241,7 +192,7 @@ const StreamingChatInterface = () => {
       await loadChatSessions();
 
     } catch (error) {
-      console.error('❌ CRITICAL: Error in sendMessage:', error);
+      console.error('❌ Error in sendMessage:', error);
       const userLanguage = detectLanguage(currentInput);
       const errorText = userLanguage === 'persian' 
         ? 'ارسال پیام با مشکل مواجه شد. لطفاً دوباره تلاش کنید.'
@@ -286,24 +237,7 @@ const StreamingChatInterface = () => {
           ) : (
             <>
               {messages.map((message) => (
-                <div key={message.id}>
-                  {message.isLoading ? (
-                    <div className="bg-[#2f2f2f]">
-                      <div className="max-w-4xl mx-auto px-6 py-6 flex gap-6">
-                        <div className="flex-shrink-0">
-                          <div className="w-8 h-8 rounded-full bg-[#19c37d] text-white flex items-center justify-center text-sm font-medium">
-                            AI
-                          </div>
-                        </div>
-                        <div className="flex-1">
-                          <ImageGenerationLoader message={message.content} />
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <ChatMessage message={message} />
-                  )}
-                </div>
+                <ChatMessage key={message.id} message={message} />
               ))}
               {streamingMessageId && <TypingIndicator />}
             </>
