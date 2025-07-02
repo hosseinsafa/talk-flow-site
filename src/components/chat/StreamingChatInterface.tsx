@@ -185,6 +185,81 @@ const StreamingChatInterface = () => {
             lowerText.includes('بساز'));
   };
 
+  const isConfirmationMessage = (text: string): boolean => {
+    const confirmationKeywords = [
+      'yes', 'ok', 'sure', 'confirm', 'proceed', 'go ahead',
+      'بله', 'تایید', 'باشه', 'اوکی', 'ادامه', 'برو'
+    ];
+    
+    const lowerText = text.toLowerCase().trim();
+    return confirmationKeywords.some(keyword => lowerText.includes(keyword));
+  };
+
+  const savePendingImageRequest = async (sessionId: string, prompt: string) => {
+    if (!user) return null;
+
+    try {
+      // First, delete any existing pending requests for this user to ensure only one active request
+      await supabase
+        .from('pending_image_requests')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('status', 'pending');
+
+      // Create new pending request
+      const { data, error } = await supabase
+        .from('pending_image_requests')
+        .insert({
+          user_id: user.id,
+          session_id: sessionId,
+          prompt: prompt,
+          status: 'pending'
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data.id;
+    } catch (error) {
+      console.error('Error saving pending image request:', error);
+      return null;
+    }
+  };
+
+  const getPendingImageRequest = async () => {
+    if (!user) return null;
+
+    try {
+      const { data, error } = await supabase
+        .from('pending_image_requests')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error; // PGRST116 is "no rows returned"
+      return data;
+    } catch (error) {
+      console.error('Error getting pending image request:', error);
+      return null;
+    }
+  };
+
+  const markPendingRequestCompleted = async (requestId: string) => {
+    try {
+      const { error } = await supabase
+        .from('pending_image_requests')
+        .update({ status: 'completed', updated_at: new Date().toISOString() })
+        .eq('id', requestId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error marking request as completed:', error);
+    }
+  };
+
   const generateImage = async (prompt: string) => {
     try {
       console.log('Starting DALL·E 3 image generation with prompt:', prompt);
@@ -485,54 +560,81 @@ const StreamingChatInterface = () => {
       // Save user message
       await saveMessage(sessionId, currentInput, 'user');
 
-      // Check if this is an image generation request
-      if (isImageGenerationRequest(currentInput)) {
-        console.log('🎨 Detected image generation request');
+      // Check if this is a confirmation message
+      if (isConfirmationMessage(currentInput)) {
+        const pendingRequest = await getPendingImageRequest();
         
-        const loadingMessage: Message = {
-          id: `loading_${Date.now()}`,
-          content: 'Generating image...',
-          role: 'assistant',
-          timestamp: new Date()
-        };
-        setMessages(prev => [...prev, loadingMessage]);
-
-        try {
-          const imageUrl = await generateImage(currentInput);
+        if (pendingRequest) {
+          console.log('🎨 Processing confirmed image generation request');
           
-          const imageMessage: Message = {
-            id: `img_${Date.now()}`,
-            content: `Generated image based on: "${currentInput}"`,
-            role: 'assistant',
-            timestamp: new Date(),
-            imageUrl: imageUrl
-          };
-
-          setMessages(prev => prev.map(msg => 
-            msg.id === loadingMessage.id ? imageMessage : msg
-          ));
-
-          await saveMessage(sessionId, imageMessage.content, 'assistant');
-          await updateUsageCount();
-
-        } catch (imageError) {
-          console.error('❌ Image generation error:', imageError);
-          
-          const errorMessage: Message = {
-            id: `error_${Date.now()}`,
-            content: `Sorry, I couldn't generate the image. Error: ${imageError.message}`,
+          const loadingMessage: Message = {
+            id: `loading_${Date.now()}`,
+            content: 'Generating image...',
             role: 'assistant',
             timestamp: new Date()
           };
+          setMessages(prev => [...prev, loadingMessage]);
 
-          setMessages(prev => prev.map(msg => 
-            msg.id === loadingMessage.id ? errorMessage : msg
-          ));
+          try {
+            const imageUrl = await generateImage(pendingRequest.prompt);
+            
+            const imageMessage: Message = {
+              id: `img_${Date.now()}`,
+              content: `Generated image based on: "${pendingRequest.prompt}"`,
+              role: 'assistant',
+              timestamp: new Date(),
+              imageUrl: imageUrl
+            };
 
-          await saveMessage(sessionId, errorMessage.content, 'assistant');
+            setMessages(prev => prev.map(msg => 
+              msg.id === loadingMessage.id ? imageMessage : msg
+            ));
+
+            await saveMessage(sessionId, imageMessage.content, 'assistant');
+            await updateUsageCount();
+            await markPendingRequestCompleted(pendingRequest.id);
+
+          } catch (imageError) {
+            console.error('❌ Image generation error:', imageError);
+            
+            const errorMessage: Message = {
+              id: `error_${Date.now()}`,
+              content: `Sorry, I couldn't generate the image. Error: ${imageError.message}`,
+              role: 'assistant',
+              timestamp: new Date()
+            };
+
+            setMessages(prev => prev.map(msg => 
+              msg.id === loadingMessage.id ? errorMessage : msg
+            ));
+
+            await saveMessage(sessionId, errorMessage.content, 'assistant');
+          }
+        } else {
+          // No pending request, treat as normal chat
+          console.log('💬 No pending image request, processing as normal chat');
+          await streamChatResponse([...messages, userMessage], sessionId);
         }
+      }
+      // Check if this is an image generation request
+      else if (isImageGenerationRequest(currentInput)) {
+        console.log('🎨 Detected image generation request, asking for confirmation');
+        
+        // Save the pending request
+        await savePendingImageRequest(sessionId, currentInput);
+        
+        // Ask for confirmation
+        const confirmationMessage: Message = {
+          id: `confirm_${Date.now()}`,
+          content: 'I see you want to generate an image. Would you like me to proceed? Please confirm by saying "yes" or "confirm".',
+          role: 'assistant',
+          timestamp: new Date()
+        };
+
+        setMessages(prev => [...prev, confirmationMessage]);
+        await saveMessage(sessionId, confirmationMessage.content, 'assistant');
       } else {
-        // Stream text response
+        // Normal text chat - use streaming
         console.log('💬 Starting text response streaming');
         await streamChatResponse([...messages, userMessage], sessionId);
       }

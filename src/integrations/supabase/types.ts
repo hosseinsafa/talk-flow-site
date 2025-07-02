@@ -152,6 +152,44 @@ export type Database = {
         }
         Relationships: []
       }
+      pending_image_requests: {
+        Row: {
+          created_at: string
+          id: string
+          prompt: string
+          session_id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          prompt: string
+          session_id: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          prompt?: string
+          session_id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pending_image_requests_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "chat_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       phone_otp_codes: {
         Row: {
           attempts: number
