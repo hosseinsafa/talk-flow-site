@@ -221,7 +221,6 @@ Rewrite this prompt:`
 
       if (error) {
         console.error('Error rewriting prompt:', error);
-        // Fallback to original prompt if rewrite fails
         return originalPrompt;
       }
 
@@ -238,17 +237,15 @@ Rewrite this prompt:`
     try {
       console.log('Starting DALL·E 3 image generation with original prompt:', prompt);
       
-      // Rewrite prompt using GPT-4 for maximum quality
       const enhancedPrompt = await rewritePromptWithGPT4(prompt);
       console.log('Using enhanced prompt for DALL·E 3:', enhancedPrompt);
       
-      // Call the generate-image function (DALL·E 3 via OpenAI)
       const { data, error } = await supabase.functions.invoke('generate-image', {
         body: {
           prompt: enhancedPrompt,
           model: 'dall-e-3',
-          size: '1024x1792', // Fixed: Changed from invalid '1024x1536' to valid '1024x1792'
-          quality: 'hd', // HD quality for best results
+          size: '1024x1792',
+          quality: 'hd',
           n: 1
         }
       });
@@ -261,7 +258,6 @@ Rewrite this prompt:`
       console.log('DALL·E 3 generation completed:', data);
       
       if (data.data && data.data[0] && data.data[0].url) {
-        // Save image generation to database with enhanced prompt
         await saveImageGeneration(enhancedPrompt, data.data[0].url);
         return data.data[0].url;
       } else {
@@ -328,7 +324,6 @@ Rewrite this prompt:`
     try {
       let sessionId = currentSessionId;
 
-      // Create new session if this is a new chat
       if (isNewChat || !sessionId) {
         sessionId = await createNewSession(currentInput);
         if (!sessionId) {
@@ -336,17 +331,14 @@ Rewrite this prompt:`
         }
         setCurrentSessionId(sessionId);
         setIsNewChat(false);
-        await loadChatSessions(); // Refresh sidebar
+        await loadChatSessions();
       }
 
-      // Save user message
       await saveMessage(sessionId, currentInput, 'user');
 
-      // Check if this is an image generation request
       if (isImageGenerationRequest(currentInput)) {
         console.log('Detected image generation request');
         
-        // Add "Generating image..." message
         const loadingMessage: Message = {
           id: (Date.now() + 1).toString(),
           content: 'Generating image...',
@@ -356,10 +348,8 @@ Rewrite this prompt:`
         setMessages(prev => [...prev, loadingMessage]);
 
         try {
-          // Generate image using DALL·E 3 with GPT-4 enhanced prompt
           const imageUrl = await generateImage(currentInput);
           
-          // Replace loading message with image
           const imageMessage: Message = {
             id: (Date.now() + 2).toString(),
             content: `Generated image based on: "${currentInput}"`,
@@ -372,14 +362,12 @@ Rewrite this prompt:`
             msg.id === loadingMessage.id ? imageMessage : msg
           ));
 
-          // Save assistant message with image
           await saveMessage(sessionId, imageMessage.content, 'assistant');
           await updateUsageCount();
 
         } catch (imageError) {
           console.error('Image generation error:', imageError);
           
-          // Replace loading message with error
           const errorMessage: Message = {
             id: (Date.now() + 2).toString(),
             content: `Sorry, I couldn't generate the image. Error: ${imageError.message}`,
@@ -394,7 +382,6 @@ Rewrite this prompt:`
           await saveMessage(sessionId, errorMessage.content, 'assistant');
         }
       } else {
-        // Normal text chat - use OpenAI
         const { data, error } = await supabase.functions.invoke('chat', {
           body: {
             messages: [
@@ -424,14 +411,11 @@ Rewrite this prompt:`
         };
 
         setMessages(prev => [...prev, assistantMessage]);
-
-        // Save assistant message
         await saveMessage(sessionId, assistantMessage.content, 'assistant');
       }
 
-      // Update session timestamp
       await updateSessionTimestamp(sessionId);
-      await loadChatSessions(); // Refresh sidebar to show updated timestamp
+      await loadChatSessions();
 
     } catch (error) {
       console.error('Error:', error);
@@ -474,7 +458,7 @@ Rewrite this prompt:`
   };
 
   return (
-    <div className="flex h-screen bg-[#212121] text-white">
+    <div className="min-h-screen bg-[#212121] text-white">
       {/* Sidebar */}
       <ChatSidebar
         isOpen={sidebarOpen}
@@ -485,10 +469,10 @@ Rewrite this prompt:`
         onSelectSession={selectSession}
       />
 
-      {/* Main Chat Area */}
-      <div className="flex flex-col flex-1 relative">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-white/10 bg-[#212121]">
+      {/* Main Chat Area - Changed from flex to normal layout */}
+      <div className={`transition-all duration-300 ${sidebarOpen ? 'lg:ml-80' : ''}`}>
+        {/* Header - Fixed at top */}
+        <div className="sticky top-0 z-10 flex items-center justify-between p-4 border-b border-white/10 bg-[#212121]">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -522,11 +506,11 @@ Rewrite this prompt:`
           </div>
         </div>
 
-        {/* Messages - Updated to allow scrolling */}
-        <div className="flex-1 overflow-y-auto" style={{ height: 'calc(100vh - 160px)' }}>
+        {/* Messages - Scrollable content */}
+        <div className="pb-32">
           {messages.length === 0 ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center text-white max-w-2xl px-6">
+            <div className="flex items-center justify-center min-h-screen p-6">
+              <div className="text-center text-white max-w-2xl">
                 <h2 className="text-4xl font-semibold mb-6">How can I help, {getUserName()}?</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
                   <div className="p-4 rounded-xl bg-[#2f2f2f] hover:bg-[#3f3f3f] transition-colors cursor-pointer">
@@ -574,8 +558,8 @@ Rewrite this prompt:`
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input - Fixed position */}
-        <div className="p-6 bg-[#212121] border-t border-white/10">
+        {/* Input - Fixed at bottom */}
+        <div className="fixed bottom-0 left-0 right-0 p-6 bg-[#212121] border-t border-white/10" style={{ marginLeft: sidebarOpen ? '320px' : '0' }}>
           <div className="max-w-4xl mx-auto">
             <form onSubmit={handleSubmit} className="relative">
               <div className="relative bg-[#2f2f2f] border border-white/20 rounded-3xl shadow-lg hover:border-white/30 transition-colors">

@@ -57,23 +57,25 @@
     @apply bg-black text-white font-vazir;
     direction: rtl;
     text-align: right;
-    /* Enable smooth scrolling */
+    /* Enable scrolling */
+    overflow: auto !important;
     -webkit-overflow-scrolling: touch;
-    /* Remove overscroll behavior that was preventing scrolling */
+    /* Remove fixed positioning issues */
+    position: relative;
   }
 
   /* PWA and Mobile specific styles */
   html {
-    height: 100%;
-    /* Allow scrolling on mobile */
-    overflow: auto;
+    /* Allow full scrolling */
+    overflow: auto !important;
+    height: auto;
   }
 
   #root {
+    /* Remove height restrictions */
     min-height: 100vh;
-    min-height: 100dvh; /* Dynamic viewport height for mobile */
-    /* Allow scrolling within the app */
-    overflow: auto;
+    min-height: 100dvh;
+    overflow: visible !important;
   }
 
   /* Safe area support for notched devices */
@@ -112,10 +114,22 @@
     font-size: 16px;
   }
 
-  /* Hide scrollbar on mobile but keep functionality */
+  /* Mobile scrolling fixes */
   @media (max-width: 768px) {
+    body {
+      /* Force enable scrolling on mobile */
+      overflow-y: auto !important;
+      overscroll-behavior: auto;
+    }
+    
+    html {
+      overflow-y: auto !important;
+    }
+    
+    /* Hide scrollbar but keep functionality */
     ::-webkit-scrollbar {
-      display: none;
+      width: 0px;
+      background: transparent;
     }
     
     * {
