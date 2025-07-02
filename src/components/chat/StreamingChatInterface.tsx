@@ -242,15 +242,19 @@ const StreamingChatInterface = () => {
 
   const streamChatResponse = async (messages: Message[], sessionId: string) => {
     try {
+      console.log('🚀 Starting streaming chat request...');
+      
+      // Abort any existing request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
       abortControllerRef.current = new AbortController();
       
-      console.log('Starting streaming chat request...');
-      
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/streaming-chat`, {
+      const response = await fetch(`https://dwejnmcdvldbaqzltidt.supabase.co/functions/v1/streaming-chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR3ZWpubWNkdmxkYmFxemx0aWR0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExMzk2MTYsImV4cCI6MjA2NjcxNTYxNn0.qNtS4Xu_W2Ss3IqPRnYoyWJzmyxl9laajKFCNyOyvhQ`,
         },
         body: JSON.stringify({
           messages: messages.map(msg => ({
@@ -264,24 +268,24 @@ const StreamingChatInterface = () => {
         signal: abortControllerRef.current.signal
       });
 
+      console.log('📡 Response status:', response.status, response.statusText);
+
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Streaming response error:', response.status, errorText);
+        console.error('❌ Streaming response error:', response.status, errorText);
         throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
       }
 
-      console.log('Response received, starting stream processing');
-
       const reader = response.body?.getReader();
       if (!reader) {
-        throw new Error('No response body reader available');
+        throw new Error('❌ No response body reader available');
       }
 
       const decoder = new TextDecoder();
       let accumulatedContent = '';
       const streamingId = `streaming_${Date.now()}`;
       
-      console.log('Created streaming message with ID:', streamingId);
+      console.log('✅ Created streaming message with ID:', streamingId);
       setStreamingMessageId(streamingId);
 
       // Add initial streaming message
@@ -294,34 +298,36 @@ const StreamingChatInterface = () => {
       };
 
       setMessages(prev => {
-        console.log('Adding initial streaming message to state');
+        console.log('➕ Adding initial streaming message');
         return [...prev, initialMessage];
       });
 
       try {
+        let buffer = '';
+        
         while (true) {
           const { done, value } = await reader.read();
           
           if (done) {
-            console.log('Stream reading completed');
+            console.log('✅ Stream reading completed');
             break;
           }
 
           const chunk = decoder.decode(value, { stream: true });
-          console.log('Received chunk:', chunk.substring(0, 100) + '...');
+          buffer += chunk;
           
-          // Split chunk by lines and process each line
-          const lines = chunk.split('\n');
+          // Process complete lines
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
 
           for (const line of lines) {
             if (line.trim() === '') continue;
             
             if (line.startsWith('data: ')) {
               const data = line.slice(6).trim();
-              console.log('Processing data line:', data);
               
               if (data === '[DONE]') {
-                console.log('Stream completed with [DONE]');
+                console.log('🏁 Stream completed with [DONE]');
                 break;
               }
 
@@ -330,7 +336,7 @@ const StreamingChatInterface = () => {
                 const content = parsed.choices?.[0]?.delta?.content;
                 
                 if (content) {
-                  console.log('Adding content to stream:', content);
+                  console.log('💬 Adding content to stream:', content);
                   accumulatedContent += content;
                   
                   // Update the streaming message with accumulated content
@@ -345,36 +351,37 @@ const StreamingChatInterface = () => {
                   ));
                 }
               } catch (parseError) {
-                console.log('Parse error for chunk (expected for some chunks):', parseError);
+                console.log('⚠️ Parse error for chunk (expected for some chunks):', parseError);
               }
             }
           }
         }
       } catch (streamError) {
-        console.error('Stream reading error:', streamError);
+        console.error('❌ Stream reading error:', streamError);
         if (streamError.name !== 'AbortError') {
           throw streamError;
         }
       }
 
-      console.log('Final accumulated content:', accumulatedContent);
+      console.log('✅ Final accumulated content length:', accumulatedContent.length);
 
-      // Create the final message with a new stable ID
+      // Create the final message with proper content
+      const finalContent = accumulatedContent.trim() || 'Sorry, I couldn\'t generate a response.';
       const finalMessageId = `msg_${Date.now()}`;
       const finalMessage: Message = {
         id: finalMessageId,
-        content: accumulatedContent.trim() || 'Sorry, I couldn\'t generate a response.',
+        content: finalContent,
         role: 'assistant',
         timestamp: new Date(),
         isStreaming: false
       };
 
-      console.log('Creating final message with ID:', finalMessageId);
+      console.log('✅ Creating final message with ID:', finalMessageId);
 
       // Replace the streaming message with the final message
       setMessages(prev => {
         const withoutStreaming = prev.filter(msg => msg.id !== streamingId);
-        console.log('Replacing streaming message with final message');
+        console.log('🔄 Replacing streaming message with final message');
         return [...withoutStreaming, finalMessage];
       });
 
@@ -382,22 +389,20 @@ const StreamingChatInterface = () => {
       setStreamingMessageId(null);
 
       // Save the complete message if there's content
-      if (accumulatedContent.trim()) {
-        console.log('Saving message to database:', accumulatedContent);
-        await saveMessage(sessionId, accumulatedContent, 'assistant');
+      if (finalContent !== 'Sorry, I couldn\'t generate a response.') {
+        console.log('💾 Saving message to database');
+        await saveMessage(sessionId, finalContent, 'assistant');
         await updateUsageCount();
-      } else {
-        console.warn('No content accumulated from stream');
       }
 
-      return accumulatedContent;
+      return finalContent;
 
     } catch (error) {
-      console.error('Streaming error:', error);
+      console.error('❌ Streaming error:', error);
       setStreamingMessageId(null);
       
       if (error.name === 'AbortError') {
-        console.log('Request was aborted');
+        console.log('⚠️ Request was aborted');
         return;
       }
       
@@ -449,6 +454,8 @@ const StreamingChatInterface = () => {
   const sendMessage = async () => {
     if (!input.trim() || !user || isLoading) return;
 
+    console.log('📤 Sending message:', input.trim());
+
     const userMessage: Message = {
       id: `user_${Date.now()}`,
       content: input.trim(),
@@ -480,7 +487,7 @@ const StreamingChatInterface = () => {
 
       // Check if this is an image generation request
       if (isImageGenerationRequest(currentInput)) {
-        console.log('Detected image generation request');
+        console.log('🎨 Detected image generation request');
         
         const loadingMessage: Message = {
           id: `loading_${Date.now()}`,
@@ -509,7 +516,7 @@ const StreamingChatInterface = () => {
           await updateUsageCount();
 
         } catch (imageError) {
-          console.error('Image generation error:', imageError);
+          console.error('❌ Image generation error:', imageError);
           
           const errorMessage: Message = {
             id: `error_${Date.now()}`,
@@ -526,7 +533,7 @@ const StreamingChatInterface = () => {
         }
       } else {
         // Stream text response
-        console.log('Starting text response streaming');
+        console.log('💬 Starting text response streaming');
         await streamChatResponse([...messages, userMessage], sessionId);
       }
 
@@ -534,7 +541,7 @@ const StreamingChatInterface = () => {
       await loadChatSessions();
 
     } catch (error) {
-      console.error('Error in sendMessage:', error);
+      console.error('❌ Error in sendMessage:', error);
       toast({
         title: "خطا",
         description: "ارسال پیام با مشکل مواجه شد. لطفاً دوباره تلاش کنید.",
@@ -665,7 +672,7 @@ const StreamingChatInterface = () => {
                   onKeyDown={handleKeyDown}
                   placeholder="Message ChatGPT..."
                   disabled={isLoading}
-                  className="resize-none border-0 bg-transparent px-6 py-4 pr-20 text-white placeholder-gray-400 focus:ring-0 focus:outline-none min-h-[56px] max-h-[200px] leading-6 text-base font-[system-ui,-apple-system,BlinkMacSystemFont,'Segoe_UI',Roboto,sans-serif]"
+                  className="resize-none border-0 bg-transparent px-6 py-4 pr-20 text-white placeholder-gray-400 focus:ring-0 focus:outline-none min-h-[56px] max-h-[200px] leading-6 text-base font-[system-ui,-apple-system,BlinkMacSystemFont,'Segue_UI',Roboto,sans-serif]"
                   style={{ height: 'auto' }}
                 />
                 <div className="absolute right-3 bottom-3 flex items-center gap-2">
