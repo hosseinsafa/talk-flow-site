@@ -170,29 +170,78 @@ const StreamingChatInterface = () => {
     }
   };
 
-  const isImageGenerationRequest = (text: string): boolean => {
-    const imageKeywords = [
-      'generate', 'create', 'make', 'draw', 'design', 'paint', 'sketch',
-      'image', 'picture', 'photo', 'illustration', 'artwork', 'visual',
-      'بساز', 'تصویر', 'عکس', 'نقاشی', 'طراحی', 'ایجاد'
-    ];
-    
+  const detectLanguage = (text: string): 'persian' | 'english' => {
+    // Check for Persian characters
+    const persianRegex = /[\u0600-\u06FF]/;
+    return persianRegex.test(text) ? 'persian' : 'english';
+  };
+
+  const isImageGenerationRequest = (text: string): { isRequest: boolean; hasSpecificObject: boolean; object?: string } => {
     const lowerText = text.toLowerCase();
-    return imageKeywords.some(keyword => lowerText.includes(keyword)) &&
-           (lowerText.includes('image') || lowerText.includes('picture') || 
-            lowerText.includes('تصویر') || lowerText.includes('عکس') ||
-            lowerText.includes('generate') || lowerText.includes('create') ||
-            lowerText.includes('بساز'));
+    
+    // Persian patterns
+    const persianPatterns = [
+      /می‌?تون(ی|ید)\s+(تصویر|عکس)\s+(.+?)\s+بساز(ی|ید)/i,
+      /می‌?تون(ی|ید)\s+(تصویر|عکس)\s+بساز(ی|ید)/i,
+      /(تصویر|عکس)\s+(.+?)\s+بساز/i,
+      /(بساز|ایجاد کن|درست کن)\s+(تصویر|عکس)/i
+    ];
+
+    // English patterns
+    const englishPatterns = [
+      /can you (generate|create|make|draw)\s+(an?|the)?\s*image\s+of\s+(.+)/i,
+      /can you (generate|create|make|draw)\s+(an?|the)?\s*(image|picture|photo)/i,
+      /(generate|create|make|draw)\s+(an?|the)?\s*image\s+of\s+(.+)/i,
+      /(generate|create|make|draw)\s+(an?|the)?\s*(image|picture|photo)/i
+    ];
+
+    // Check for specific object requests
+    for (const pattern of persianPatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        const objectMatch = match[3] || match[2];
+        if (objectMatch && !['تصویر', 'عکس', 'بساز', 'بسازی', 'بسازید'].includes(objectMatch.trim())) {
+          return { isRequest: true, hasSpecificObject: true, object: objectMatch.trim() };
+        }
+        return { isRequest: true, hasSpecificObject: false };
+      }
+    }
+
+    for (const pattern of englishPatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        const objectMatch = match[3];
+        if (objectMatch) {
+          return { isRequest: true, hasSpecificObject: true, object: objectMatch.trim() };
+        }
+        return { isRequest: true, hasSpecificObject: false };
+      }
+    }
+
+    // Basic keyword detection
+    const persianKeywords = ['تصویر', 'عکس', 'بساز', 'ایجاد', 'طراحی'];
+    const englishKeywords = ['generate', 'create', 'make', 'image', 'picture', 'photo'];
+    
+    const hasPersianKeywords = persianKeywords.some(keyword => lowerText.includes(keyword));
+    const hasEnglishKeywords = englishKeywords.some(keyword => lowerText.includes(keyword));
+    
+    if (hasPersianKeywords || hasEnglishKeywords) {
+      return { isRequest: true, hasSpecificObject: false };
+    }
+
+    return { isRequest: false, hasSpecificObject: false };
   };
 
   const isConfirmationMessage = (text: string): boolean => {
     const confirmationKeywords = [
       'yes', 'ok', 'sure', 'confirm', 'proceed', 'go ahead',
-      'بله', 'تایید', 'باشه', 'اوکی', 'ادامه', 'برو'
+      'بله', 'تایید', 'باشه', 'اوکی', 'ادامه', 'برو', 'بساز', 'آره', 'اره'
     ];
     
     const lowerText = text.toLowerCase().trim();
-    return confirmationKeywords.some(keyword => lowerText.includes(keyword));
+    return confirmationKeywords.some(keyword => 
+      lowerText === keyword || lowerText.includes(keyword)
+    );
   };
 
   const savePendingImageRequest = async (sessionId: string, prompt: string) => {
@@ -560,6 +609,10 @@ const StreamingChatInterface = () => {
       // Save user message
       await saveMessage(sessionId, currentInput, 'user');
 
+      // Detect language and image generation request
+      const userLanguage = detectLanguage(currentInput);
+      const imageRequest = isImageGenerationRequest(currentInput);
+
       // Check if this is a confirmation message
       if (isConfirmationMessage(currentInput)) {
         const pendingRequest = await getPendingImageRequest();
@@ -569,7 +622,7 @@ const StreamingChatInterface = () => {
           
           const loadingMessage: Message = {
             id: `loading_${Date.now()}`,
-            content: 'Generating image...',
+            content: userLanguage === 'persian' ? 'در حال ساخت تصویر...' : 'Generating image...',
             role: 'assistant',
             timestamp: new Date()
           };
@@ -580,7 +633,9 @@ const StreamingChatInterface = () => {
             
             const imageMessage: Message = {
               id: `img_${Date.now()}`,
-              content: `Generated image based on: "${pendingRequest.prompt}"`,
+              content: userLanguage === 'persian' 
+                ? `تصویر بر اساس "${pendingRequest.prompt}" ساخته شد`
+                : `Generated image based on: "${pendingRequest.prompt}"`,
               role: 'assistant',
               timestamp: new Date(),
               imageUrl: imageUrl
@@ -599,7 +654,9 @@ const StreamingChatInterface = () => {
             
             const errorMessage: Message = {
               id: `error_${Date.now()}`,
-              content: `Sorry, I couldn't generate the image. Error: ${imageError.message}`,
+              content: userLanguage === 'persian'
+                ? `متاسفم، نتونستم تصویر رو بسازم. خطا: ${imageError.message}`
+                : `Sorry, I couldn't generate the image. Error: ${imageError.message}`,
               role: 'assistant',
               timestamp: new Date()
             };
@@ -617,22 +674,39 @@ const StreamingChatInterface = () => {
         }
       }
       // Check if this is an image generation request
-      else if (isImageGenerationRequest(currentInput)) {
-        console.log('🎨 Detected image generation request, asking for confirmation');
+      else if (imageRequest.isRequest) {
+        console.log('🎨 Detected image generation request');
         
-        // Save the pending request
-        await savePendingImageRequest(sessionId, currentInput);
+        let confirmationMessage: string;
         
-        // Ask for confirmation
-        const confirmationMessage: Message = {
+        if (userLanguage === 'persian') {
+          if (imageRequest.hasSpecificObject && imageRequest.object) {
+            confirmationMessage = `بله، می‌تونم تصویر '${imageRequest.object}' رو بسازم. آیا تأیید می‌کنید که تصویر ساخته شود؟`;
+          } else {
+            confirmationMessage = 'بله، می‌تونم تصویر بسازم. چه تصویری نیاز دارید؟';
+          }
+        } else {
+          if (imageRequest.hasSpecificObject && imageRequest.object) {
+            confirmationMessage = `Yes, I can generate an image of '${imageRequest.object}'. Do you confirm to proceed with generating the image?`;
+          } else {
+            confirmationMessage = 'Yes, I can generate an image. What image would you like me to generate?';
+          }
+        }
+
+        // Save the pending request only if we have a specific object
+        if (imageRequest.hasSpecificObject && imageRequest.object) {
+          await savePendingImageRequest(sessionId, imageRequest.object);
+        }
+        
+        const confirmationResponse: Message = {
           id: `confirm_${Date.now()}`,
-          content: 'I see you want to generate an image. Would you like me to proceed? Please confirm by saying "yes" or "confirm".',
+          content: confirmationMessage,
           role: 'assistant',
           timestamp: new Date()
         };
 
-        setMessages(prev => [...prev, confirmationMessage]);
-        await saveMessage(sessionId, confirmationMessage.content, 'assistant');
+        setMessages(prev => [...prev, confirmationResponse]);
+        await saveMessage(sessionId, confirmationResponse.content, 'assistant');
       } else {
         // Normal text chat - use streaming
         console.log('💬 Starting text response streaming');
@@ -740,11 +814,11 @@ const StreamingChatInterface = () => {
                     <h3 className="font-medium mb-2">Generate an image</h3>
                     <p className="text-sm text-gray-400">of a futuristic city</p>
                   </div>
-                  <div className="p-4 rounded-xl bg-[#2f2f2f] hover:bg-[#3f3f2f] transition-colors cursor-pointer">
+                  <div className="p-4 rounded-xl bg-[#2f2f2f] hover:bg-[#3f3f3f] transition-colors cursor-pointer">
                     <h3 className="font-medium mb-2">Explain quantum physics</h3>
                     <p className="text-sm text-gray-400">in simple terms</p>
                   </div>
-                  <div className="p-4 rounded-xl bg-[#2f2f2f] hover:bg-[#3f3f2f] transition-colors cursor-pointer">
+                  <div className="p-4 rounded-xl bg-[#2f2f2f] hover:bg-[#3f3f3f] transition-colors cursor-pointer">
                     <h3 className="font-medium mb-2">Plan a trip</h3>
                     <p className="text-sm text-gray-400">to Japan for 7 days</p>
                   </div>
