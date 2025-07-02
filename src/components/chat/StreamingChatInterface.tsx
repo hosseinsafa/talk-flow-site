@@ -230,6 +230,7 @@ const StreamingChatInterface = () => {
 
     } catch (error) {
       console.error('❌ Error in sendMessage:', error);
+      const userLanguage = detectLanguage(currentInput);
       const errorText = userLanguage === 'persian' 
         ? 'ارسال پیام با مشکل مواجه شد. لطفاً دوباره تلاش کنید.'
         : 'Failed to send message. Please try again.';
