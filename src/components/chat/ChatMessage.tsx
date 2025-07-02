@@ -37,7 +37,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
     setImageLoading(false);
   };
 
-  // Debug logging
+  // Debug logging - moved outside JSX
   console.log('🔍 ChatMessage render:', {
     messageId: message.id,
     hasImageUrl: !!message.imageUrl,
@@ -45,6 +45,11 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
     isLoading: imageLoading,
     hasError: imageError
   });
+
+  // Additional debug log for image rendering - moved outside JSX
+  if (message.imageUrl) {
+    console.log('🖼️ Rendering image section for:', message.imageUrl);
+  }
   
   return (
     <div className="group w-full bg-[#2f2f2f] animate-fade-in">
@@ -73,8 +78,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
           {/* Display generated image if available */}
           {message.imageUrl && (
             <div className="mt-4 animate-scale-in">
-              {console.log('🖼️ Rendering image section for:', message.imageUrl)}
-              
               {imageLoading && !imageError && (
                 <div className="bg-gray-600 rounded-xl animate-pulse flex items-center justify-center" style={{ width: '400px', height: '300px' }}>
                   <div className="flex flex-col items-center text-gray-300">
