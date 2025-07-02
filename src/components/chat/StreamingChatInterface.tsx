@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import ChatMessage from './ChatMessage';
 import ChatSidebar from './ChatSidebar';
@@ -29,6 +30,7 @@ const StreamingChatInterface = () => {
     saveMessage,
     updateUsageCount,
     addMessage,
+    updateMessage,
     clearMessages,
     abortStreaming,
     toast
@@ -155,12 +157,12 @@ const StreamingChatInterface = () => {
                 : `Generated image based on: "${pendingRequest.prompt}"`,
               role: 'assistant',
               timestamp: new Date(),
-              imageUrl: imageUrl
+              imageUrl: imageUrl,
+              isLoading: false
             };
 
-            setMessages(prev => prev.map(msg => 
-              msg.id === loadingMessageId ? imageMessage : msg
-            ));
+            console.log('🖼️ Updating message with image URL:', imageMessage);
+            updateMessage(loadingMessageId, imageMessage);
 
             await saveMessage(sessionId, imageMessage.content, 'assistant');
             await updateUsageCount();
@@ -177,13 +179,11 @@ const StreamingChatInterface = () => {
                 ? 'متأسفم، مشکلی در ساخت تصویر پیش آمد. لطفاً دوباره تلاش کنید.'
                 : `Sorry, I couldn't generate the image. Please try again.`,
               role: 'assistant',
-              timestamp: new Date()
+              timestamp: new Date(),
+              isLoading: false
             };
 
-            setMessages(prev => prev.map(msg => 
-              msg.id === loadingMessageId ? errorMessage : msg
-            ));
-
+            updateMessage(loadingMessageId, errorMessage);
             await saveMessage(sessionId, errorMessage.content, 'assistant');
           }
         } else {

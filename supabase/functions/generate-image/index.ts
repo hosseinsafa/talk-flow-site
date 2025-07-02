@@ -80,13 +80,6 @@ serve(async (req) => {
       created: data.created
     });
 
-    // Log the actual URL for debugging
-    if (data.data?.[0]?.url) {
-      console.log('🖼️ Generated image URL:', data.data[0].url);
-    } else {
-      console.error('❌ No image URL in response:', JSON.stringify(data, null, 2));
-    }
-
     // Validate response structure
     if (!data.data || !Array.isArray(data.data) || data.data.length === 0) {
       console.error('❌ Invalid response structure:', data);
@@ -102,16 +95,13 @@ serve(async (req) => {
     console.log('✅ Image generation completed successfully');
     console.log('🔗 Final image URL:', imageUrl);
 
-    // Return consistent format
+    // Return standardized format
     const responsePayload = {
       status: 'success',
-      data: [{
-        url: imageUrl
-      }],
-      image_url: imageUrl // Also include direct access
+      image_url: imageUrl
     };
 
-    console.log('📤 Sending response:', JSON.stringify(responsePayload, null, 2));
+    console.log('📤 Sending standardized response:', JSON.stringify(responsePayload, null, 2));
 
     return new Response(JSON.stringify(responsePayload), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

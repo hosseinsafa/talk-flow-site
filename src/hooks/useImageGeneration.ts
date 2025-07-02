@@ -193,30 +193,22 @@ export const useImageGeneration = () => {
 
       console.log('📋 Response data structure:', {
         status: data.status,
-        hasData: !!data.data,
         hasImageUrl: !!data.image_url,
-        dataArray: data.data?.length
+        imageUrl: data.image_url?.substring(0, 50) + '...'
       });
 
-      // Extract image URL from multiple possible response formats
-      let imageUrl = null;
-      
-      if (data.status === 'success' && data.data?.[0]?.url) {
-        imageUrl = data.data[0].url;
-        console.log('✅ Image URL from data array:', imageUrl);
-      } else if (data.image_url) {
-        imageUrl = data.image_url;
-        console.log('✅ Image URL from direct field:', imageUrl);
-      } else if (data.data?.[0]?.url) {
-        imageUrl = data.data[0].url;
-        console.log('✅ Image URL from fallback:', imageUrl);
+      // Check for successful response and extract image URL
+      if (data.status !== 'success') {
+        console.error('❌ Function returned error status:', data);
+        throw new Error(data.error || 'Image generation failed');
       }
 
-      if (!imageUrl) {
-        console.error('❌ No image URL found in response:', data);
+      if (!data.image_url) {
+        console.error('❌ No image_url in successful response:', data);
         throw new Error('No image URL returned from DALL·E 3');
       }
 
+      const imageUrl = data.image_url;
       console.log('🖼️ Final image URL:', imageUrl);
       
       // Save to database

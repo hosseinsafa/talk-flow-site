@@ -68,7 +68,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
                 <div className="bg-gray-600 rounded-xl animate-pulse flex items-center justify-center" style={{ width: '400px', height: '300px' }}>
                   <div className="flex flex-col items-center text-gray-300">
                     <div className="w-8 h-8 border-2 border-gray-300 border-t-transparent rounded-full animate-spin mb-2"></div>
-                    <span className="text-sm">Loading image...</span>
+                    <span className="text-sm">
+                      {hasPersianText ? 'در حال بارگذاری تصویر...' : 'Loading image...'}
+                    </span>
                   </div>
                 </div>
               )}
@@ -80,14 +82,14 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.996-.833-2.768 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
                     </svg>
                     <span className="text-sm">
-                      {hasPersianText ? 'خطا در بارگذاری تصویر' : 'Failed to load image'}
+                      {hasPersianText ? 'متأسفم، مشکلی در بارگذاری تصویر پیش آمد. لطفاً دوباره تلاش کنید.' : 'Sorry, failed to load image. Please try again.'}
                     </span>
                   </div>
                 </div>
               ) : (
                 <img 
                   src={message.imageUrl} 
-                  alt="Generated image"
+                  alt={hasPersianText ? "تصویر تولید شده" : "Generated image"}
                   className="rounded-xl max-w-full h-auto shadow-lg"
                   style={{ 
                     maxHeight: '400px',
