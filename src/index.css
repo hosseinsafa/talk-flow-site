@@ -57,21 +57,23 @@
     @apply bg-black text-white font-vazir;
     direction: rtl;
     text-align: right;
-    /* Prevent bouncing on iOS */
+    /* Enable smooth scrolling */
     -webkit-overflow-scrolling: touch;
-    overscroll-behavior: none;
+    /* Remove overscroll behavior that was preventing scrolling */
   }
 
   /* PWA and Mobile specific styles */
   html {
     height: 100%;
-    overflow: hidden;
+    /* Allow scrolling on mobile */
+    overflow: auto;
   }
 
   #root {
-    height: 100vh;
-    height: 100dvh; /* Dynamic viewport height for mobile */
-    overflow: hidden;
+    min-height: 100vh;
+    min-height: 100dvh; /* Dynamic viewport height for mobile */
+    /* Allow scrolling within the app */
+    overflow: auto;
   }
 
   /* Safe area support for notched devices */

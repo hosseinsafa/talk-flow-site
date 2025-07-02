@@ -522,8 +522,8 @@ Rewrite this prompt:`
           </div>
         </div>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto">
+        {/* Messages - Updated to allow scrolling */}
+        <div className="flex-1 overflow-y-auto" style={{ height: 'calc(100vh - 160px)' }}>
           {messages.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center text-white max-w-2xl px-6">
@@ -574,8 +574,8 @@ Rewrite this prompt:`
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input */}
-        <div className="p-6 bg-[#212121]">
+        {/* Input - Fixed position */}
+        <div className="p-6 bg-[#212121] border-t border-white/10">
           <div className="max-w-4xl mx-auto">
             <form onSubmit={handleSubmit} className="relative">
               <div className="relative bg-[#2f2f2f] border border-white/20 rounded-3xl shadow-lg hover:border-white/30 transition-colors">
