@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -207,7 +208,7 @@ serve(async (req) => {
         .update({ status: 'processing' })
         .eq('id', generationRecord.id)
 
-      // Prepare input payload with aspect_ratio only
+      // Prepare input payload
       let input: any = {
         prompt: prompt,
         num_outputs: 1,
@@ -215,16 +216,16 @@ serve(async (req) => {
         output_quality: 90
       }
 
-      // Determine model version and correct settings
-      let modelVersion = ""
+      // Determine model and correct settings
+      let modelName = ""
       
       if (model === 'flux_dev') {
-        modelVersion = "362f78965670d5c91c4084b3e52398969c87b3b01b3a2b0e6c7f9e6afd98b69b"
+        modelName = "black-forest-labs/flux-dev"
         input.guidance_scale = cfg_scale
         input.num_inference_steps = steps
       } else {
-        // Use flux-schnell with correct version
-        modelVersion = "f2ab8a5569070ad749f0c6ded6fcb7f70aa4aa370c88c7b13b3b42b3e2c7c9fb"
+        // Use flux-schnell
+        modelName = "black-forest-labs/flux-schnell"
         input.num_inference_steps = 4
       }
 
@@ -249,12 +250,12 @@ serve(async (req) => {
       }
 
       console.log('=== REPLICATE API CALL DETAILS ===')
-      console.log('Model version:', modelVersion)
+      console.log('Model name:', modelName)
       console.log('Input payload:', JSON.stringify(input, null, 2))
 
-      // Fixed request payload structure - REMOVED model field
+      // Correct request payload structure using model field
       const requestPayload = {
-        version: modelVersion,
+        model: modelName,
         input: input
       }
 
@@ -269,7 +270,7 @@ serve(async (req) => {
       console.log('=== CALLING REPLICATE API ===')
       while (retryCount <= maxRetries) {
         try {
-          // Call Replicate API
+          // Call Replicate API with correct structure
           response = await fetch('https://api.replicate.com/v1/predictions', {
             method: 'POST',
             headers: {
