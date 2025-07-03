@@ -186,6 +186,7 @@ serve(async (req) => {
         .eq('id', generationRecord.id)
 
       // Prepare input payload - ONLY use aspect_ratio, NO width/height
+      let modelName = ""
       let modelVersion = ""
       let input: any = {
         prompt: prompt,
@@ -196,12 +197,14 @@ serve(async (req) => {
 
       // Determine model and version
       if (model === 'flux_dev') {
-        modelVersion = "black-forest-labs/flux-dev:362f78965670d5c91c4084b3e52398969c87b3b01b3a2b0e6c7f9e6afd98b69b"
+        modelName = "black-forest-labs/flux-dev"
+        modelVersion = "362f78965670d5c91c4084b3e52398969c87b3b01b3a2b0e6c7f9e6afd98b69b"
         input.guidance_scale = cfg_scale
         input.num_inference_steps = steps
       } else {
         // Use flux-schnell with correct version
-        modelVersion = "black-forest-labs/flux-schnell:f2ab8a5569070ad749f0c6ded6fcb7f70aa4aa370c88c7b13b3b42b3e2c7c9fb"
+        modelName = "black-forest-labs/flux-schnell"
+        modelVersion = "f2ab8a5569070ad749f0c6ded6fcb7f70aa4aa370c88c7b13b3b42b3e2c7c9fb"
         input.num_inference_steps = 4
       }
 
@@ -227,10 +230,12 @@ serve(async (req) => {
       }
 
       console.log('=== REPLICATE API CALL DETAILS ===')
+      console.log('Model name:', modelName)
       console.log('Model version:', modelVersion)
       console.log('Input payload (NO width/height):', JSON.stringify(input, null, 2))
 
       const requestPayload = {
+        model: modelName,
         version: modelVersion,
         input: input
       }
