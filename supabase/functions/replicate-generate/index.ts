@@ -253,14 +253,20 @@ serve(async (req) => {
       console.log('Model version:', modelVersion)
       console.log('Input payload:', JSON.stringify(input, null, 2))
 
-      // REST API request payload structure - ONLY version and input
+      // REST API request payload structure - ONLY version and input (NO model field)
       const requestPayload = {
         version: modelVersion,
         input: input
       }
 
-      console.log('Full request payload:', JSON.stringify(requestPayload, null, 2))
+      console.log('Final request payload to Replicate:', JSON.stringify(requestPayload, null, 2))
       console.log("PAYLOAD SENT TO REPLICATE:", JSON.stringify(requestPayload, null, 2))
+
+      // Verify no model field exists in payload
+      if ('model' in requestPayload) {
+        console.error('ERROR: model field found in payload, removing it')
+        delete (requestPayload as any).model
+      }
 
       // Retry logic for rate limiting
       let retryCount = 0;
