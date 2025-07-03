@@ -187,14 +187,28 @@ serve(async (req) => {
 
       console.log('Using Replicate model:', replicateModel)
 
-      // Prepare input for Replicate - support different aspect ratios
-      const input = {
+      // Prepare input for Replicate - fix the input format
+      const input: any = {
         prompt: prompt,
-        width: width,
-        height: height,
         num_outputs: 1,
         output_format: "webp",
         output_quality: 90
+      }
+
+      // Set dimensions based on aspect ratio
+      if (width === 1024 && height === 1024) {
+        // 1:1 aspect ratio
+        input.aspect_ratio = "1:1"
+      } else if (width === 1280 && height === 720) {
+        // 16:9 aspect ratio
+        input.aspect_ratio = "16:9"
+      } else if (width === 720 && height === 1280) {
+        // 9:16 aspect ratio
+        input.aspect_ratio = "9:16"
+      } else {
+        // Fallback to custom dimensions
+        input.width = width
+        input.height = height
       }
 
       // Add model-specific parameters
@@ -207,11 +221,11 @@ serve(async (req) => {
       }
 
       // Add negative prompt if provided
-      if (negative_prompt) {
+      if (negative_prompt && negative_prompt.trim()) {
         input.negative_prompt = negative_prompt
       }
 
-      console.log('Replicate input:', input)
+      console.log('Replicate input payload:', JSON.stringify(input, null, 2))
 
       // Call Replicate API with correct format
       const response = await fetch('https://api.replicate.com/v1/predictions', {
@@ -221,19 +235,24 @@ serve(async (req) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: replicateModel,
+          version: replicateModel === "black-forest-labs/flux-schnell" 
+            ? "f2ab8a5569070ad749f0c6ded6fcb7f70aa4aa370c88c7b13b3b42b3e2c7c9fb"
+            : "dev",
           input: input
         }),
       })
 
+      const responseText = await response.text()
+      console.log('Replicate API response status:', response.status)
+      console.log('Replicate API response:', responseText)
+
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error('Replicate API error:', response.status, errorText)
-        throw new Error(`Replicate API error: ${response.status} - ${errorText}`)
+        console.error('Replicate API error:', response.status, responseText)
+        throw new Error(`Replicate API error: ${response.status} - ${responseText}`)
       }
 
-      const result = await response.json()
-      console.log('Replicate response:', result)
+      const result = JSON.parse(responseText)
+      console.log('Replicate parsed response:', result)
 
       const predictionId = result.id
       
