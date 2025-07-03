@@ -1,4 +1,5 @@
 
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -28,6 +29,7 @@ function App() {
         <AuthProvider>
           <Router>
             <div className="min-h-screen bg-white">
+              <Navigation />
               <Toaster />
               <Sonner />
               <Routes>
@@ -84,3 +86,4 @@ function App() {
 }
 
 export default App;
+
