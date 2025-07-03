@@ -30,58 +30,60 @@ function App() {
           <Router>
             <div className="min-h-screen bg-white">
               <Navigation />
-              <Toaster />
-              <Sonner />
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/auth" element={<Auth />} />
-                <Route path="/account" element={
-                  <ProtectedRoute>
-                    <Account />
-                  </ProtectedRoute>
-                } />
-                <Route path="/chat" element={
-                  <ProtectedRoute>
-                    <Chat />
-                  </ProtectedRoute>
-                } />
-                <Route path="/chat/:sessionId" element={
-                  <ProtectedRoute>
-                    <FullScreenChat />
-                  </ProtectedRoute>
-                } />
-                <Route path="/image" element={
-                  <ProtectedRoute>
-                    <ImageGeneration />
-                  </ProtectedRoute>
-                } />
-                <Route path="/image-generation" element={
-                  <ProtectedRoute>
-                    <ImageGeneration />
-                  </ProtectedRoute>
-                } />
-                <Route path="/library" element={
-                  <ProtectedRoute>
-                    <ImageLibrary />
-                  </ProtectedRoute>
-                } />
-                <Route path="/video-generation" element={
-                  <ProtectedRoute>
-                    <VideoGeneration />
-                  </ProtectedRoute>
-                } />
-                <Route path="/enhance" element={
-                  <ProtectedRoute>
-                    <Enhance />
-                  </ProtectedRoute>
-                } />
-                <Route path="/payment" element={
-                  <ProtectedRoute>
-                    <Payment />
-                  </ProtectedRoute>
-                } />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
+              <main className="pt-16">
+                <Toaster />
+                <Sonner />
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/auth" element={<Auth />} />
+                  <Route path="/account" element={
+                    <ProtectedRoute>
+                      <Account />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/chat" element={
+                    <ProtectedRoute>
+                      <Chat />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/chat/:sessionId" element={
+                    <ProtectedRoute>
+                      <FullScreenChat />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/image" element={
+                    <ProtectedRoute>
+                      <ImageGeneration />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/image-generation" element={
+                    <ProtectedRoute>
+                      <ImageGeneration />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/library" element={
+                    <ProtectedRoute>
+                      <ImageLibrary />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/video-generation" element={
+                    <ProtectedRoute>
+                      <VideoGeneration />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/enhance" element={
+                    <ProtectedRoute>
+                      <Enhance />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/payment" element={
+                    <ProtectedRoute>
+                      <Payment />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </main>
             </div>
           </Router>
         </AuthProvider>

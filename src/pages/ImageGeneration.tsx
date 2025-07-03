@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -277,7 +276,7 @@ const ImageGeneration = () => {
   const selectedImage = selectedImageIndex !== null ? generatedImages[selectedImageIndex] : null;
 
   return (
-    <div className="h-screen bg-[#121212] text-white flex overflow-hidden">
+    <div className="h-[calc(100vh-4rem)] bg-[#121212] text-white flex overflow-hidden">
       {/* Left Sidebar */}
       <div className="w-16 bg-[#1A1A1A] border-r border-gray-800 flex flex-col py-4">
         {/* New Generation Button */}

@@ -1,114 +1,107 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { 
-  Search,
   Download,
   Trash2,
-  Filter,
-  Grid3X3,
-  Grid2X2,
-  Calendar,
-  Image as ImageIcon
+  Image,
+  X
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useKavenegarAuth } from '@/hooks/useKavenegarAuth';
 import { toast } from 'sonner';
 
-interface LibraryImage {
+interface GeneratedImage {
   id: string;
   prompt: string;
   image_url: string;
+  status: string;
+  created_at: string;
   model_used: string;
   aspect_ratio: string;
-  created_at: string;
 }
 
 const ImageLibrary = () => {
-  const [images, setImages] = useState<LibraryImage[]>([]);
-  const [filteredImages, setFilteredImages] = useState<LibraryImage[]>([]);
+  const [images, setImages] = useState<GeneratedImage[]>([]);
+  const [filteredImages, setFilteredImages] = useState<GeneratedImage[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedModel, setSelectedModel] = useState('all');
-  const [selectedRatio, setSelectedRatio] = useState('all');
-  const [sortBy, setSortBy] = useState('newest');
-  const [viewMode, setViewMode] = useState<'grid' | 'large'>('grid');
-  const [isLoading, setIsLoading] = useState(true);
+  const [selectedAspectRatio, setSelectedAspectRatio] = useState('all');
+  const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null);
 
   const { user, session } = useAuth();
   const { user: phoneUser, isAuthenticated: isPhoneAuth } = useKavenegarAuth();
   const currentUser = phoneUser || user;
 
-  // Load images from library
   useEffect(() => {
-    const loadImages = async () => {
-      if (!currentUser) return;
+    const fetchImages = async () => {
+      setIsLoading(true);
+      if (!currentUser) {
+        setIsLoading(false);
+        return;
+      }
 
       try {
-        setIsLoading(true);
-        const { data, error } = await supabase
+        let query = supabase
           .from('image_library')
           .select('*')
           .eq('user_id', currentUser.id)
           .order('created_at', { ascending: false });
 
-        if (error) {
-          console.error('Failed to load images:', error);
-          toast.error('Failed to load images');
-          return;
-        }
+        const { data, error } = await query;
 
-        if (data) {
-          setImages(data);
-          setFilteredImages(data);
+        if (error) {
+          console.error('Error fetching images:', error);
+          toast.error('Failed to load images');
+        } else {
+          setImages(data || []);
         }
       } catch (error) {
-        console.error('Error loading images:', error);
-        toast.error('Error loading images');
+        console.error('Error fetching images:', error);
+        toast.error('Failed to load images');
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadImages();
+    fetchImages();
   }, [currentUser]);
 
-  // Filter and search logic
   useEffect(() => {
     let filtered = [...images];
 
-    // Search filter
     if (searchQuery) {
-      filtered = filtered.filter(img => 
-        img.prompt?.toLowerCase().includes(searchQuery.toLowerCase())
+      filtered = filtered.filter(image =>
+        image.prompt.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
 
-    // Model filter
     if (selectedModel !== 'all') {
-      filtered = filtered.filter(img => img.model_used === selectedModel);
+      filtered = filtered.filter(image => image.model_used === selectedModel);
     }
 
-    // Aspect ratio filter
-    if (selectedRatio !== 'all') {
-      filtered = filtered.filter(img => img.aspect_ratio === selectedRatio);
-    }
-
-    // Sort
-    if (sortBy === 'newest') {
-      filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    } else if (sortBy === 'oldest') {
-      filtered.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    if (selectedAspectRatio !== 'all') {
+      filtered = filtered.filter(image => image.aspect_ratio === selectedAspectRatio);
     }
 
     setFilteredImages(filtered);
-  }, [images, searchQuery, selectedModel, selectedRatio, sortBy]);
+  }, [images, searchQuery, selectedModel, selectedAspectRatio]);
 
-  // Delete image
-  const handleDeleteImage = async (imageId: string) => {
+  const handleDownload = (image: GeneratedImage) => {
+    const link = document.createElement('a');
+    link.href = image.image_url;
+    link.download = `image-${image.id}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Image downloaded');
+  };
+
+  const handleDelete = async (imageId: string) => {
     try {
       const { error } = await supabase
         .from('image_library')
@@ -116,205 +109,201 @@ const ImageLibrary = () => {
         .eq('id', imageId);
 
       if (error) {
+        console.error('Error deleting image:', error);
         toast.error('Failed to delete image');
-        return;
+      } else {
+        setImages(prevImages => prevImages.filter(image => image.id !== imageId));
+        toast.success('Image deleted');
       }
-
-      setImages(prev => prev.filter(img => img.id !== imageId));
-      toast.success('Image deleted');
     } catch (error) {
+      console.error('Error deleting image:', error);
       toast.error('Failed to delete image');
     }
   };
 
-  // Download image
-  const handleDownloadImage = (imageUrl: string, prompt: string) => {
-    const link = document.createElement('a');
-    link.href = imageUrl;
-    link.download = `${prompt.substring(0, 30).replace(/[^a-zA-Z0-9]/g, '_')}-${Date.now()}.png`;
-    link.click();
-    toast.success('Image downloaded');
-  };
-
-  if (!currentUser) {
-    return (
-      <div className="h-screen bg-[#121212] text-white flex items-center justify-center">
-        <div className="text-center">
-          <ImageIcon className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-          <h2 className="text-xl font-semibold mb-2">Sign in to view your library</h2>
-          <p className="text-gray-400">Your generated images will appear here after signing in</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="h-screen bg-[#121212] text-white flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="border-b border-gray-800 bg-[#1A1A1A] p-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h1 className="text-2xl font-semibold text-white">Image Library</h1>
-              <p className="text-gray-400 mt-1">Browse and manage your generated images</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant={viewMode === 'grid' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('grid')}
-                className="text-white"
-              >
-                <Grid3X3 className="w-4 h-4" />
-              </Button>
-              <Button
-                variant={viewMode === 'large' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('large')}
-                className="text-white"
-              >
-                <Grid2X2 className="w-4 h-4" />
-              </Button>
-            </div>
+    <div className="min-h-[calc(100vh-4rem)] bg-[#121212] text-white">
+      <div className="max-w-7xl mx-auto p-6">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-white mb-2">مکتبة الصور</h1>
+            <p className="text-gray-400">جميع الصور المولدة بواسطة الذكاء الاصطناعي</p>
           </div>
-
+          
           {/* Filters */}
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="relative flex-1 min-w-64">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by prompt..."
-                className="pl-10 bg-[#2A2A2A] border-gray-700 text-white placeholder-gray-500"
-              />
-            </div>
-
+          <div className="flex items-center gap-4">
             <Select value={selectedModel} onValueChange={setSelectedModel}>
               <SelectTrigger className="w-40 bg-[#2A2A2A] border-gray-700 text-white">
-                <SelectValue placeholder="All Models" />
+                <SelectValue placeholder="تصفية حسب النموذج" />
               </SelectTrigger>
               <SelectContent className="bg-[#2A2A2A] border-gray-700">
-                <SelectItem value="all" className="text-white">All Models</SelectItem>
-                <SelectItem value="dall-e-3" className="text-white">DALL·E 3</SelectItem>
+                <SelectItem value="all" className="text-white">جميع النماذج</SelectItem>
                 <SelectItem value="flux_schnell" className="text-white">Flux Schnell</SelectItem>
                 <SelectItem value="flux_dev" className="text-white">Flux Dev</SelectItem>
               </SelectContent>
             </Select>
-
-            <Select value={selectedRatio} onValueChange={setSelectedRatio}>
+            
+            <Select value={selectedAspectRatio} onValueChange={setSelectedAspectRatio}>
               <SelectTrigger className="w-32 bg-[#2A2A2A] border-gray-700 text-white">
-                <SelectValue placeholder="All Ratios" />
+                <SelectValue placeholder="النسبة" />
               </SelectTrigger>
               <SelectContent className="bg-[#2A2A2A] border-gray-700">
-                <SelectItem value="all" className="text-white">All Ratios</SelectItem>
+                <SelectItem value="all" className="text-white">جميع النسب</SelectItem>
                 <SelectItem value="1:1" className="text-white">1:1</SelectItem>
                 <SelectItem value="16:9" className="text-white">16:9</SelectItem>
                 <SelectItem value="9:16" className="text-white">9:16</SelectItem>
               </SelectContent>
             </Select>
-
-            <Select value={sortBy} onValueChange={setSortBy}>
-              <SelectTrigger className="w-32 bg-[#2A2A2A] border-gray-700 text-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-[#2A2A2A] border-gray-700">
-                <SelectItem value="newest" className="text-white">Newest</SelectItem>
-                <SelectItem value="oldest" className="text-white">Oldest</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
         </div>
-      </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-7xl mx-auto">
-          {isLoading ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="text-center">
-                <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-                <p className="text-gray-400">Loading your images...</p>
-              </div>
-            </div>
-          ) : filteredImages.length === 0 ? (
-            <div className="text-center py-16">
-              <ImageIcon className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-              <h3 className="text-lg font-medium mb-2">
-                {images.length === 0 ? 'No images yet' : 'No images found'}
-              </h3>
-              <p className="text-gray-400">
-                {images.length === 0 
-                  ? 'Start generating images to see them here'
-                  : 'Try adjusting your search or filters'
-                }
-              </p>
-            </div>
-          ) : (
-            <div className={`grid gap-6 ${
-              viewMode === 'grid' 
-                ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' 
-                : 'grid-cols-1 lg:grid-cols-2'
-            }`}>
-              {filteredImages.map((image) => (
-                <div key={image.id} className="bg-[#1A1A1A] rounded-lg overflow-hidden group hover:bg-[#202020] transition-colors">
-                  <div className="relative">
-                    <img
-                      src={image.image_url}
-                      alt={image.prompt || 'Generated image'}
-                      className={`w-full object-cover ${
-                        viewMode === 'grid' ? 'h-64' : 'h-96'
-                      }`}
-                    />
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+        {/* Search */}
+        <div className="mb-6">
+          <Input
+            type="text"
+            placeholder="البحث في الصور..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="max-w-md bg-[#2A2A2A] border-gray-700 text-white placeholder-gray-500"
+          />
+        </div>
+
+        {/* Loading State */}
+        {isLoading && (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-gray-400">جاري التحميل...</div>
+          </div>
+        )}
+
+        {/* Images Grid */}
+        {!isLoading && filteredImages.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {filteredImages.map((image) => (
+              <div key={image.id} className="bg-[#1A1A1A] rounded-lg overflow-hidden hover:bg-[#222] transition-colors">
+                <div className="relative aspect-square">
+                  <img
+                    src={image.image_url}
+                    alt={image.prompt}
+                    className="w-full h-full object-cover cursor-pointer"
+                    onClick={() => setSelectedImage(image)}
+                  />
+                </div>
+                
+                <div className="p-4">
+                  <p className="text-sm text-gray-300 mb-3 line-clamp-2">
+                    {image.prompt}
+                  </p>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-xs bg-gray-800 border-gray-700 text-gray-300">
+                        {image.model_used}
+                      </Badge>
+                      <Badge variant="outline" className="text-xs bg-gray-800 border-gray-700 text-gray-300">
+                        {image.aspect_ratio}
+                      </Badge>
+                    </div>
+                    
+                    <div className="flex items-center gap-1">
                       <Button
+                        variant="ghost"
                         size="sm"
-                        variant="secondary"
-                        onClick={() => handleDownloadImage(image.image_url, image.prompt || 'image')}
-                        className="bg-white/20 hover:bg-white/30 text-white border-0"
+                        className="text-gray-400 hover:text-white p-1"
+                        onClick={() => handleDownload(image)}
                       >
                         <Download className="w-4 h-4" />
                       </Button>
                       <Button
+                        variant="ghost"
                         size="sm"
-                        variant="destructive"
-                        onClick={() => handleDeleteImage(image.id)}
-                        className="bg-red-500/80 hover:bg-red-500 text-white border-0"
+                        className="text-gray-400 hover:text-red-400 p-1"
+                        onClick={() => handleDelete(image.id)}
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
                   </div>
-
-                  <div className="p-4">
-                    <p className="text-sm text-gray-300 line-clamp-2 mb-3">
-                      {image.prompt || 'No prompt available'}
-                    </p>
-                    
-                    <div className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
-                        {image.model_used && (
-                          <Badge variant="outline" className="text-xs bg-gray-800 border-gray-700 text-gray-300">
-                            {image.model_used}
-                          </Badge>
-                        )}
-                        {image.aspect_ratio && (
-                          <Badge variant="outline" className="text-xs bg-gray-800 border-gray-700 text-gray-300">
-                            {image.aspect_ratio}
-                          </Badge>
-                        )}
-                      </div>
-                      <span className="text-gray-500">
-                        {new Date(image.created_at).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!isLoading && filteredImages.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-12">
+            <Image className="w-16 h-16 text-gray-600 mb-4" />
+            <h3 className="text-xl font-semibold text-gray-400 mb-2">لا توجد صور</h3>
+            <p className="text-gray-500 text-center max-w-md">
+              {searchQuery ? 'لم يتم العثور على صور تطابق البحث' : 'لم تقم بإنشاء أي صور بعد. ابدأ بإنشاء صور جديدة!'}
+            </p>
+          </div>
+        )}
       </div>
+
+      {/* Image Modal */}
+      {selectedImage && (
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4">
+          <div className="max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="relative">
+              <img
+                src={selectedImage.image_url}
+                alt={selectedImage.prompt}
+                className="w-full h-auto rounded-lg"
+              />
+              
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute top-4 right-4 bg-black/50 hover:bg-black/70 text-white"
+                onClick={() => setSelectedImage(null)}
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+            
+            <div className="mt-4 p-4 bg-[#1A1A1A] rounded-lg">
+              <p className="text-white mb-4">{selectedImage.prompt}</p>
+              
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="bg-gray-800 border-gray-700 text-gray-300">
+                    {selectedImage.model_used}
+                  </Badge>
+                  <Badge variant="outline" className="bg-gray-800 border-gray-700 text-gray-300">
+                    {selectedImage.aspect_ratio}
+                  </Badge>
+                  <span className="text-sm text-gray-400">
+                    {new Date(selectedImage.created_at).toLocaleDateString('ar-SA')}
+                  </span>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDownload(selectedImage)}
+                    className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    تحميل
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDelete(selectedImage.id)}
+                    className="bg-red-800 border-red-700 text-white hover:bg-red-700"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    حذف
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
