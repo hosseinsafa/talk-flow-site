@@ -216,16 +216,16 @@ serve(async (req) => {
         output_quality: 90
       }
 
-      // Determine model version and correct settings
-      let modelVersion = ""
+      // Determine correct model path and settings
+      let modelPath = ""
       
       if (model === 'flux_dev') {
-        modelVersion = "362f78965670d5c91c4084b3e52398969c87b3b01b3a2b0e6c7f9e6afd98b69b"
+        modelPath = "black-forest-labs/flux-dev"
         input.guidance_scale = cfg_scale
         input.num_inference_steps = steps
       } else {
-        // Use flux-schnell with correct version
-        modelVersion = "f2ab8a5569070ad749f0c6ded6fcb7f70aa4aa370c88c7b13b3b42b3e2c7c9fb"
+        // Use flux-schnell 
+        modelPath = "black-forest-labs/flux-schnell"
         input.num_inference_steps = 4
       }
 
@@ -250,23 +250,16 @@ serve(async (req) => {
       }
 
       console.log('=== REPLICATE API CALL DETAILS ===')
-      console.log('Model version:', modelVersion)
+      console.log('Model path:', modelPath)
       console.log('Input payload:', JSON.stringify(input, null, 2))
 
-      // REST API request payload structure - ONLY version and input (NO model field)
+      // Use the correct Replicate SDK structure
       const requestPayload = {
-        version: modelVersion,
+        model: modelPath,
         input: input
       }
 
       console.log('Final request payload to Replicate:', JSON.stringify(requestPayload, null, 2))
-      console.log("PAYLOAD SENT TO REPLICATE:", JSON.stringify(requestPayload, null, 2))
-
-      // Verify no model field exists in payload
-      if ('model' in requestPayload) {
-        console.error('ERROR: model field found in payload, removing it')
-        delete (requestPayload as any).model
-      }
 
       // Retry logic for rate limiting
       let retryCount = 0;
@@ -276,7 +269,7 @@ serve(async (req) => {
       console.log('=== CALLING REPLICATE API ===')
       while (retryCount <= maxRetries) {
         try {
-          // Call Replicate REST API with correct structure
+          // Call Replicate REST API with SDK structure
           response = await fetch('https://api.replicate.com/v1/predictions', {
             method: 'POST',
             headers: {
