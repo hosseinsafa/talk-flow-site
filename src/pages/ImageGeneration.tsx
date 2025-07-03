@@ -45,6 +45,8 @@ const ImageGeneration = () => {
   const [showExamples, setShowExamples] = useState(false);
   const [currentGenerationId, setCurrentGenerationId] = useState<string | null>(null);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  const [lastGenerationTime, setLastGenerationTime] = useState<number>(0);
+  const [cooldownRemaining, setCooldownRemaining] = useState<number>(0);
   
   const { user, session } = useAuth();
   const { user: phoneUser, isAuthenticated: isPhoneAuth } = useKavenegarAuth();
@@ -57,6 +59,28 @@ const ImageGeneration = () => {
     width: 1024,
     height: 1024
   });
+
+  // Cooldown timer effect
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    if (cooldownRemaining > 0) {
+      interval = setInterval(() => {
+        setCooldownRemaining(prev => {
+          if (prev <= 1) {
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [cooldownRemaining]);
 
   // Load images for the current project
   useEffect(() => {
@@ -146,7 +170,20 @@ const ImageGeneration = () => {
       return;
     }
 
+    // Check cooldown
+    const now = Date.now();
+    const timeSinceLastGeneration = now - lastGenerationTime;
+    const minCooldown = 2000; // 2 seconds minimum cooldown
+
+    if (timeSinceLastGeneration < minCooldown) {
+      const remainingCooldown = Math.ceil((minCooldown - timeSinceLastGeneration) / 1000);
+      setCooldownRemaining(remainingCooldown);
+      toast.error(`Please wait ${remainingCooldown} seconds before generating another image`);
+      return;
+    }
+
     setIsGenerating(true);
+    setLastGenerationTime(now);
     
     try {
       const enhancedPrompt = `${prompt}, ${settings.style} style`;
@@ -167,6 +204,15 @@ const ImageGeneration = () => {
 
       if (error) {
         console.error('Generation error:', error);
+        
+        // Handle rate limiting specifically
+        if (error.message?.includes('429') || error.message?.includes('throttled') || error.message?.includes('rate limit')) {
+          toast.error('Rate limit reached. Please wait a moment before trying again.');
+          setCooldownRemaining(5); // 5 second cooldown for rate limit
+          setIsGenerating(false);
+          return;
+        }
+        
         toast.error(`Error generating image: ${error.message}`);
         setIsGenerating(false);
         return;
@@ -180,15 +226,23 @@ const ImageGeneration = () => {
       
     } catch (error) {
       console.error('Generation error:', error);
-      toast.error(`Error generating image: ${error.message}`);
+      
+      // Handle rate limiting in catch block too
+      if (error.message?.includes('429') || error.message?.includes('throttled') || error.message?.includes('rate limit')) {
+        toast.error('Rate limit reached. Please wait a moment before trying again.');
+        setCooldownRemaining(5);
+      } else {
+        toast.error(`Error generating image: ${error.message}`);
+      }
+      
       setIsGenerating(false);
     }
   };
 
-  // Poll for generation result
-  const pollForResult = async (generationId: string) => {
+  // Poll for generation result with retry logic for 429 errors
+  const pollForResult = async (generationId: string, retryCount = 0) => {
     const maxAttempts = 60;
-    let attempts = 0;
+    const maxRetries = 3;
     
     const poll = async () => {
       try {
@@ -200,6 +254,22 @@ const ImageGeneration = () => {
         });
 
         if (error) {
+          // Handle rate limiting in status check
+          if (error.message?.includes('429') || error.message?.includes('throttled')) {
+            if (retryCount < maxRetries) {
+              console.log(`Rate limited during status check, retrying in 3 seconds (attempt ${retryCount + 1})`);
+              setTimeout(() => {
+                pollForResult(generationId, retryCount + 1);
+              }, 3000);
+              return;
+            } else {
+              toast.error('Status check rate limited. Please check back later.');
+              setIsGenerating(false);
+              setCurrentGenerationId(null);
+              return;
+            }
+          }
+          
           console.error('Status check error:', error);
           throw error;
         }
@@ -228,9 +298,11 @@ const ImageGeneration = () => {
           return;
         }
 
-        attempts++;
-        if (attempts < maxAttempts) {
-          setTimeout(poll, 10000);
+        // Continue polling if still processing
+        if (retryCount < maxAttempts) {
+          setTimeout(() => {
+            pollForResult(generationId, 0); // Reset retry count for next poll
+          }, 10000);
         } else {
           toast.error('Generation timeout');
           setIsGenerating(false);
@@ -387,6 +459,18 @@ const ImageGeneration = () => {
     toast.success('Image downloaded');
   };
 
+  // Check if generation is disabled
+  const isGenerationDisabled = () => {
+    return !prompt.trim() || isGenerating || !currentUser || cooldownRemaining > 0;
+  };
+
+  // Get button text based on state
+  const getButtonText = () => {
+    if (isGenerating) return 'Generating...';
+    if (cooldownRemaining > 0) return `Wait ${cooldownRemaining}s`;
+    return 'Generate';
+  };
+
   const selectedImage = selectedImageIndex !== null ? generatedImages[selectedImageIndex] : null;
 
   return (
@@ -510,7 +594,7 @@ const ImageGeneration = () => {
                 placeholder="Describe an image and click generate..."
                 className="w-full bg-[#2A2A2A] border-gray-700 text-white placeholder-gray-500 pr-32 min-h-[120px] max-h-[300px] text-sm rounded-lg resize-none"
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && e.ctrlKey && !isGenerating) {
+                  if (e.key === 'Enter' && e.ctrlKey && !isGenerationDisabled()) {
                     handleGenerate();
                   }
                 }}
@@ -518,12 +602,25 @@ const ImageGeneration = () => {
               
               <Button
                 onClick={handleGenerate}
-                disabled={!prompt.trim() || isGenerating || !currentUser}
-                className="absolute right-3 top-3 bg-white text-black hover:bg-gray-200 px-4 h-8 text-sm font-medium rounded-md"
+                disabled={isGenerationDisabled()}
+                className={`absolute right-3 top-3 px-4 h-8 text-sm font-medium rounded-md ${
+                  isGenerationDisabled() 
+                    ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
+                    : 'bg-white text-black hover:bg-gray-200'
+                }`}
               >
-                {isGenerating ? 'Generating...' : 'Generate'}
+                {getButtonText()}
               </Button>
             </div>
+
+            {/* Show rate limiting info */}
+            {cooldownRemaining > 0 && (
+              <div className="mb-3 text-center">
+                <p className="text-sm text-yellow-400">
+                  ⏱️ Rate limit protection active. Please wait {cooldownRemaining} seconds.
+                </p>
+              </div>
+            )}
 
             {/* Controls */}
             <div className="flex items-center justify-between text-sm">

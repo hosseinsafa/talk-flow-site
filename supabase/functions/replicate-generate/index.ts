@@ -1,5 +1,4 @@
 
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -17,6 +16,8 @@ interface GenerationRequest {
   height?: number
   model: string
 }
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -234,24 +235,88 @@ serve(async (req) => {
 
       console.log('Full request payload:', JSON.stringify(requestPayload, null, 2))
 
-      // Call Replicate API
-      const response = await fetch('https://api.replicate.com/v1/predictions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Token ${REPLICATE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestPayload),
-      })
+      // Retry logic for rate limiting
+      let retryCount = 0;
+      const maxRetries = 3;
+      let response;
 
-      console.log('=== REPLICATE API RESPONSE ===')
-      console.log('Response status:', response.status)
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()))
+      while (retryCount <= maxRetries) {
+        try {
+          // Call Replicate API
+          response = await fetch('https://api.replicate.com/v1/predictions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Token ${REPLICATE_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestPayload),
+          })
+
+          console.log('=== REPLICATE API RESPONSE ===')
+          console.log('Response status:', response.status)
+          console.log('Response headers:', Object.fromEntries(response.headers.entries()))
+
+          // Handle rate limiting
+          if (response.status === 429) {
+            const retryAfter = response.headers.get('retry-after') || response.headers.get('x-ratelimit-reset-after');
+            const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : Math.pow(2, retryCount) * 1000; // Exponential backoff
+
+            if (retryCount < maxRetries) {
+              console.log(`Rate limited (429). Retrying in ${waitTime}ms (attempt ${retryCount + 1}/${maxRetries})`);
+              await sleep(waitTime);
+              retryCount++;
+              continue;
+            } else {
+              console.error('Max retries exceeded for rate limiting');
+              const errorMessage = 'Request was throttled. Please try again in a few seconds.';
+              
+              await supabaseClient
+                .from('image_generations')
+                .update({ 
+                  status: 'failed',
+                  error_message: errorMessage,
+                  completed_at: new Date().toISOString()
+                })
+                .eq('id', generationRecord.id)
+
+              return new Response(
+                JSON.stringify({ 
+                  error: errorMessage,
+                  generation_id: generationRecord.id,
+                  retry_after: waitTime / 1000
+                }),
+                {
+                  status: 429,
+                  headers: { 
+                    ...corsHeaders, 
+                    'Content-Type': 'application/json',
+                    'Retry-After': String(waitTime / 1000)
+                  },
+                }
+              )
+            }
+          }
+
+          // If not rate limited, break out of retry loop
+          break;
+
+        } catch (fetchError) {
+          console.error('Network error during API call:', fetchError);
+          if (retryCount < maxRetries) {
+            console.log(`Network error. Retrying in ${1000 * (retryCount + 1)}ms...`);
+            await sleep(1000 * (retryCount + 1));
+            retryCount++;
+            continue;
+          } else {
+            throw fetchError;
+          }
+        }
+      }
 
       const responseText = await response.text()
       console.log('Raw response text:', responseText)
 
-      if (!response.ok) {
+      if (!response.ok && response.status !== 429) {
         console.error('=== REPLICATE API ERROR ===')
         console.error('Status:', response.status)
         console.error('Response:', responseText)
@@ -371,4 +436,3 @@ serve(async (req) => {
     )
   }
 })
-
