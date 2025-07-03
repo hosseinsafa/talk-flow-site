@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -19,16 +20,25 @@ interface GenerationRequest {
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 serve(async (req) => {
+  console.log('=== FUNCTION STARTED ===')
+  console.log('Request method:', req.method)
+  console.log('Request URL:', req.url)
+  console.log('Request headers:', Object.fromEntries(req.headers.entries()))
+  
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
+    console.log('=== CORS PREFLIGHT REQUEST ===')
     return new Response(null, { headers: corsHeaders })
   }
 
   try {
-    console.log('=== Replicate Generate Function Called ===')
+    console.log('=== PROCESSING POST REQUEST ===')
     
     // Get and validate authorization header
     const authHeader = req.headers.get('Authorization')
+    console.log('Auth header present:', !!authHeader)
+    console.log('Auth header starts with Bearer:', authHeader?.startsWith('Bearer '))
+    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       console.error('Invalid or missing Authorization header')
       return new Response(
@@ -45,10 +55,14 @@ serve(async (req) => {
 
     // Extract JWT token
     const jwtToken = authHeader.replace('Bearer ', '')
+    console.log('JWT token extracted, length:', jwtToken.length)
 
     // Create Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
     const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')
+    
+    console.log('Supabase URL present:', !!supabaseUrl)
+    console.log('Supabase Key present:', !!supabaseKey)
     
     if (!supabaseUrl || !supabaseKey) {
       console.error('Missing Supabase configuration')
@@ -73,6 +87,7 @@ serve(async (req) => {
       }
     })
 
+    console.log('=== VERIFYING USER AUTHENTICATION ===')
     // Verify JWT token and get user
     const { data: userData, error: authError } = await supabaseClient.auth.getUser(jwtToken)
     
@@ -93,6 +108,7 @@ serve(async (req) => {
     const user = userData.user
     console.log('User authenticated successfully:', user.id)
 
+    console.log('=== PARSING REQUEST BODY ===')
     const body: GenerationRequest = await req.json()
     console.log('Request body received:', JSON.stringify(body, null, 2))
 
@@ -107,6 +123,7 @@ serve(async (req) => {
     } = body
 
     if (!prompt) {
+      console.error('Missing prompt in request')
       return new Response(
         JSON.stringify({ error: 'Prompt is required' }),
         {
@@ -121,6 +138,7 @@ serve(async (req) => {
     console.log('Prompt:', prompt)
     console.log('Requested dimensions:', width, 'x', height)
 
+    console.log('=== CREATING DATABASE RECORD ===')
     // Create database record
     const { data: generationRecord, error: insertError } = await supabaseClient
       .from('image_generations')
@@ -151,8 +169,12 @@ serve(async (req) => {
 
     console.log('Created generation record:', generationRecord.id)
 
-    // Get Replicate API key
-    const REPLICATE_API_KEY = Deno.env.get('REPLICATE_API_KEY')
+    console.log('=== CHECKING REPLICATE API KEY ===')
+    // Get Replicate API key - Check both possible names
+    const REPLICATE_API_KEY = Deno.env.get('REPLICATE_API_KEY') || Deno.env.get('REPLICATE_API_TOKEN')
+    console.log('REPLICATE_API_KEY present:', !!REPLICATE_API_KEY)
+    console.log('REPLICATE_API_TOKEN present:', !!Deno.env.get('REPLICATE_API_TOKEN'))
+    
     if (!REPLICATE_API_KEY) {
       console.error('REPLICATE_API_KEY not found in environment')
       await supabaseClient
@@ -179,6 +201,7 @@ serve(async (req) => {
     console.log('REPLICATE_API_KEY found, length:', REPLICATE_API_KEY.length)
 
     try {
+      console.log('=== UPDATING STATUS TO PROCESSING ===')
       // Update status to processing
       await supabaseClient
         .from('image_generations')
@@ -248,6 +271,7 @@ serve(async (req) => {
       const maxRetries = 3;
       let response;
 
+      console.log('=== CALLING REPLICATE API ===')
       while (retryCount <= maxRetries) {
         try {
           // Call Replicate API
@@ -387,6 +411,7 @@ serve(async (req) => {
         })
         .eq('id', generationRecord.id)
 
+      console.log('=== FUNCTION COMPLETED SUCCESSFULLY ===')
       return new Response(
         JSON.stringify({ 
           success: true,

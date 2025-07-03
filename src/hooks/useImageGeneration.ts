@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -15,6 +14,15 @@ interface ImageGenerationResponse {
     style: string;
     model: string;
   };
+  error?: string;
+}
+
+interface ReplicateResponse {
+  success: boolean;
+  generation_id: string;
+  prediction_id: string;
+  status: string;
+  message: string;
   error?: string;
 }
 
@@ -72,44 +80,49 @@ export const useImageGeneration = () => {
 
   const generateImage = async (prompt: string) => {
     try {
-      console.log('🚀 === STARTING CHATGPT-QUALITY IMAGE GENERATION ===');
+      console.log('🚀 === STARTING REPLICATE IMAGE GENERATION ===');
       console.log('📝 Original prompt:', prompt);
       
-      const functionResponse = await supabase.functions.invoke('generate-image', {
+      // Call the replicate-generate function instead of generate-image
+      console.log('📞 Calling replicate-generate function...');
+      const functionResponse = await supabase.functions.invoke('replicate-generate', {
         body: {
-          prompt: prompt
+          prompt: prompt,
+          model: 'flux_schnell',
+          width: 1024,
+          height: 1024,
+          steps: 4,
+          cfg_scale: 1.0
         }
       });
 
-      console.log('📊 ChatGPT-quality function response:', functionResponse);
+      console.log('📊 Replicate function response:', functionResponse);
 
       if (functionResponse.error) {
         console.error('❌ Function error:', functionResponse.error);
-        throw new Error(`Image generation failed: ${functionResponse.error.message}`);
+        throw new Error(`Replicate generation failed: ${functionResponse.error.message}`);
       }
 
       if (!functionResponse.data) {
-        console.error('❌ No data returned from ChatGPT-quality function');
-        throw new Error('No response from ChatGPT-quality image generation service');
+        console.error('❌ No data returned from replicate function');
+        throw new Error('No response from Replicate image generation service');
       }
 
-      const responseData: ImageGenerationResponse = functionResponse.data;
+      const responseData: ReplicateResponse = functionResponse.data;
 
-      if (responseData.status !== 'success') {
+      if (!responseData.success) {
         console.error('❌ Function returned error status:', responseData);
-        throw new Error(responseData.error || 'ChatGPT-quality image generation failed');
+        throw new Error(responseData.error || 'Replicate image generation failed');
       }
 
-      if (!responseData.image_url) {
-        console.error('❌ No primary image_url in ChatGPT-quality response:', responseData);
-        throw new Error('No primary image URL returned from ChatGPT-quality DALL·E 3');
-      }
-
-      console.log('✅ === CHATGPT-QUALITY IMAGE GENERATION COMPLETED ===');
-      return responseData.image_url;
+      console.log('✅ Replicate generation started with ID:', responseData.prediction_id);
+      
+      // For now, return a placeholder - in a real implementation you'd poll for completion
+      // This is just to test the function call is working
+      return `https://via.placeholder.com/1024x1024.png?text=Generation+Started+${responseData.prediction_id}`;
       
     } catch (error) {
-      console.error('❌ Error in ChatGPT-quality generateImage:', error);
+      console.error('❌ Error in Replicate generateImage:', error);
       throw error;
     }
   };
@@ -175,11 +188,11 @@ export const useImageGeneration = () => {
     }
 
     try {
-      console.log('💾 Saving ChatGPT-quality image generation to database...');
+      console.log('💾 Saving Replicate image generation to database...');
       
       const promptNote = metadata?.generation_count 
-        ? `ChatGPT-quality generation (${metadata.generation_count} images generated at ${metadata.settings?.size || '1024x1024'})`
-        : 'Single ChatGPT-quality generation';
+        ? `Replicate generation (${metadata.generation_count} images generated at ${metadata.settings?.size || '1024x1024'})`
+        : 'Single Replicate generation';
       
       const { data, error } = await supabase
         .from('image_generations')
@@ -187,14 +200,14 @@ export const useImageGeneration = () => {
           user_id: user.id,
           prompt: prompt,
           image_url: imageUrl,
-          model_type: 'dall-e-3-chatgpt-quality',
+          model_type: 'flux-schnell-replicate',
           status: 'completed',
           width: 1024,
           height: 1024,
-          steps: 50,
-          cfg_scale: 7.0,
+          steps: 4,
+          cfg_scale: 1.0,
           error_message: metadata ? JSON.stringify({
-            type: 'chatgpt_quality_metadata',
+            type: 'replicate_metadata',
             generation_count: metadata.generation_count,
             all_urls_count: metadata.all_urls?.length,
             settings: metadata.settings,
@@ -209,10 +222,10 @@ export const useImageGeneration = () => {
         throw error;
       }
 
-      console.log('✅ ChatGPT-quality image generation saved:', data.id);
+      console.log('✅ Replicate image generation saved:', data.id);
       return data;
     } catch (error) {
-      console.error('❌ Error saving ChatGPT-quality image generation:', error);
+      console.error('❌ Error saving Replicate image generation:', error);
       throw error;
     }
   };
