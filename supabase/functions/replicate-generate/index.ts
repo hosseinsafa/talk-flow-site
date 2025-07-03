@@ -116,6 +116,7 @@ serve(async (req) => {
     console.log('Starting image generation for user:', user.id)
     console.log('Model:', model)
     console.log('Prompt:', prompt)
+    console.log('Dimensions:', width, 'x', height)
 
     // Create database record
     const { data: generationRecord, error: insertError } = await supabaseClient
@@ -186,7 +187,7 @@ serve(async (req) => {
 
       console.log('Using Replicate model:', replicateModel)
 
-      // Prepare input for Replicate
+      // Prepare input for Replicate - support different aspect ratios
       const input = {
         prompt: prompt,
         width: width,
@@ -212,7 +213,7 @@ serve(async (req) => {
 
       console.log('Replicate input:', input)
 
-      // Call Replicate API
+      // Call Replicate API with correct format
       const response = await fetch('https://api.replicate.com/v1/predictions', {
         method: 'POST',
         headers: {
