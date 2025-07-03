@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -503,13 +504,13 @@ const ImageGeneration = () => {
           <div className="max-w-4xl mx-auto">
             {/* Input Field */}
             <div className="relative mb-4">
-              <Input
+              <Textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="Describe an image and click generate..."
-                className="w-full bg-[#2A2A2A] border-gray-700 text-white placeholder-gray-500 pr-24 h-12 text-sm rounded-lg"
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter' && !isGenerating) {
+                className="w-full bg-[#2A2A2A] border-gray-700 text-white placeholder-gray-500 pr-24 min-h-[80px] max-h-[200px] text-sm rounded-lg resize-none"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && e.ctrlKey && !isGenerating) {
                     handleGenerate();
                   }
                 }}
