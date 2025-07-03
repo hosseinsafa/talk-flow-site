@@ -3,17 +3,15 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { 
   Plus,
   Trash2,
   Download,
   Upload,
-  Sparkles,
-  Image as ImageIcon,
   Settings,
-  Grid3X3
+  ChevronUp,
+  MoreHorizontal
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -60,52 +58,6 @@ const ImageGeneration = () => {
     height: 1024
   });
 
-  // Model options
-  const modelOptions = [
-    { value: 'flux_schnell', label: 'Flux Schnell (Fast)' },
-    { value: 'flux_dev', label: 'Flux Dev (Quality)' },
-    { value: 'flux_context', label: 'Flux Context (Advanced)' }
-  ];
-
-  // Style options
-  const styleOptions = [
-    { value: 'realistic', label: 'Realistic' },
-    { value: 'cinematic', label: 'Cinematic' },
-    { value: 'anime', label: 'Anime' },
-    { value: 'artistic', label: 'Artistic' },
-    { value: 'fantasy', label: 'Fantasy' },
-    { value: 'vintage', label: 'Vintage' }
-  ];
-
-  // Aspect ratio options
-  const aspectRatioOptions = [
-    { value: '1:1', label: '1:1', width: 1024, height: 1024 },
-    { value: '16:9', label: '16:9', width: 1280, height: 720 },
-    { value: '9:16', label: '9:16', width: 720, height: 1280 },
-    { value: '4:3', label: '4:3', width: 1024, height: 768 },
-    { value: '3:4', label: '3:4', width: 768, height: 1024 }
-  ];
-
-  // Example prompts
-  const examplePrompts = [
-    {
-      prompt: "A majestic golden lion with sleek fur prowls confidently through a rain-soaked metropolis at night, neon signs reflecting on wet asphalt as towering skyscrapers loom in the background, illuminated by dramatic cinematic lighting that highlights the predator's intense gaze and muscular frame against the urban jungle.",
-      image: "/lovable-uploads/4b5b9e5c-903d-4279-b67b-506baae7c8f2.png"
-    },
-    {
-      prompt: "A cyberpunk warrior in neon-lit Tokyo streets",
-      image: null
-    },
-    {
-      prompt: "Serene mountain landscape at golden hour",
-      image: null
-    },
-    {
-      prompt: "Futuristic spaceship interior with holographic displays",
-      image: null
-    }
-  ];
-
   // Load generation history
   useEffect(() => {
     const loadGenerationHistory = async () => {
@@ -141,6 +93,14 @@ const ImageGeneration = () => {
 
   // Handle aspect ratio change
   const handleAspectRatioChange = (aspectRatio: string) => {
+    const aspectRatioOptions = [
+      { value: '1:1', label: '1:1', width: 1024, height: 1024 },
+      { value: '16:9', label: '16:9', width: 1280, height: 720 },
+      { value: '9:16', label: '9:16', width: 720, height: 1280 },
+      { value: '4:3', label: '4:3', width: 1024, height: 768 },
+      { value: '3:4', label: '3:4', width: 768, height: 1024 }
+    ];
+    
     const option = aspectRatioOptions.find(opt => opt.value === aspectRatio);
     if (option) {
       setSettings(prev => ({
@@ -291,36 +251,35 @@ const ImageGeneration = () => {
     toast.success('Image downloaded');
   };
 
-  // Get current selected image
   const selectedImage = selectedImageIndex !== null ? generatedImages[selectedImageIndex] : null;
 
   return (
-    <div className="h-screen bg-black text-white flex overflow-hidden">
-      {/* Left Sidebar - History Thumbnails */}
-      <div className="w-20 bg-gray-900 border-r border-gray-800 flex flex-col">
+    <div className="h-screen bg-[#121212] text-white flex overflow-hidden">
+      {/* Left Sidebar */}
+      <div className="w-16 bg-[#1A1A1A] border-r border-gray-800 flex flex-col py-4">
         {/* New Generation Button */}
-        <div className="p-4 border-b border-gray-800">
+        <div className="px-2 mb-4">
           <Button
             variant="ghost"
             size="icon"
-            className="w-12 h-12 bg-gray-800 hover:bg-gray-700 text-white"
+            className="w-12 h-12 bg-gray-800 hover:bg-gray-700 text-white rounded-lg"
             onClick={() => {
               setPrompt('');
               setSelectedImageIndex(null);
             }}
           >
-            <Plus className="w-6 h-6" />
+            <Plus className="w-5 h-5" />
           </Button>
         </div>
 
         {/* History Thumbnails */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-2">
+        <div className="flex-1 overflow-y-auto px-2 space-y-2">
           {generatedImages.map((image, index) => (
             <div
               key={image.id}
-              className={`relative w-16 h-16 rounded-lg overflow-hidden cursor-pointer border-2 transition-all ${
+              className={`relative w-12 h-12 rounded-lg overflow-hidden cursor-pointer border transition-all ${
                 selectedImageIndex === index 
-                  ? 'border-blue-500 ring-2 ring-blue-500/50' 
+                  ? 'border-blue-500 ring-1 ring-blue-500/50' 
                   : 'border-gray-700 hover:border-gray-600'
               }`}
               onClick={() => setSelectedImageIndex(index)}
@@ -335,146 +294,110 @@ const ImageGeneration = () => {
         </div>
       </div>
 
-      {/* Main Content Area */}
+      {/* Main Content */}
       <div className="flex-1 flex flex-col">
-        {/* Center Image Display */}
-        <div className="flex-1 flex items-center justify-center p-8 overflow-hidden">
-          {selectedImage ? (
-            <div className="max-w-4xl max-h-full flex flex-col items-center">
-              <div className="relative rounded-lg overflow-hidden shadow-2xl mb-6">
-                <img
-                  src={selectedImage.image_url}
-                  alt={selectedImage.prompt}
-                  className="max-w-full max-h-[60vh] object-contain"
-                />
-              </div>
-              
-              {/* Image Info */}
-              <div className="bg-gray-900 rounded-lg p-6 max-w-2xl w-full">
-                <p className="text-gray-300 text-sm mb-4 leading-relaxed">
-                  {selectedImage.prompt}
-                </p>
-                
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <Badge variant="outline" className="text-xs">
-                      {selectedImage.model_type === 'flux_schnell' ? 'Flux Schnell' : 'Flux Dev'}
-                    </Badge>
-                    <Badge variant="outline" className="text-xs">
-                      {selectedImage.aspect_ratio}
-                    </Badge>
-                    <Badge variant="outline" className="text-xs">
-                      {selectedImage.width}×{selectedImage.height}
-                    </Badge>
-                  </div>
+        {/* Generated Images Display */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="max-w-4xl mx-auto space-y-6">
+            {generatedImages.map((image, index) => (
+              <div key={image.id} className="bg-[#1A1A1A] rounded-lg overflow-hidden">
+                {/* Image */}
+                <div className="relative">
+                  <img
+                    src={image.image_url}
+                    alt={image.prompt}
+                    className="w-full h-auto"
+                  />
                   
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDownloadImage(selectedImage.image_url, selectedImage.prompt)}
-                    >
-                      <Download className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDeleteImage(selectedImage.id)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                  {/* Overlay with branding */}
+                  <div className="absolute bottom-3 right-3 flex items-center gap-2 text-xs text-gray-400">
+                    <span className="bg-black/50 px-2 py-1 rounded">MINIMAX</span>
+                    <span className="bg-black/50 px-2 py-1 rounded">Hailuo AI</span>
+                  </div>
+                </div>
+
+                {/* Content */}
+                <div className="p-4">
+                  {/* Prompt section */}
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-sm font-medium text-gray-300">Prompt</h3>
+                      <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <p className="text-sm text-[#E5E5E5] leading-relaxed mb-3">
+                      {image.prompt}
+                    </p>
+                    
+                    {/* Tags */}
+                    <div className="flex items-center gap-2 mb-4">
+                      <Badge variant="outline" className="text-xs bg-gray-800 border-gray-700 text-gray-300">
+                        Image-01
+                      </Badge>
+                      <Badge variant="outline" className="text-xs bg-gray-800 border-gray-700 text-gray-300">
+                        Enable Optimization
+                      </Badge>
+                      <Badge variant="outline" className="text-xs bg-gray-800 border-gray-700 text-gray-300">
+                        {image.aspect_ratio}
+                      </Badge>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex items-center justify-between">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700"
+                        onClick={() => handleDownloadImage(image.image_url, image.prompt)}
+                      >
+                        <ChevronUp className="w-4 h-4 mr-2" />
+                        Upscale
+                      </Button>
+                      
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-gray-400 hover:text-white"
+                          onClick={() => handleDownloadImage(image.image_url, image.prompt)}
+                        >
+                          <Download className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-gray-400 hover:text-white"
+                          onClick={() => handleDeleteImage(image.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-gray-400 hover:text-white"
+                        >
+                          <MoreHorizontal className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ) : (
-            <div className="text-center text-gray-500">
-              <ImageIcon className="w-16 h-16 mx-auto mb-4 text-gray-600" />
-              <p className="text-xl mb-2">No image selected</p>
-              <p className="text-sm">Generate an image or select from history</p>
-            </div>
-          )}
+            ))}
+          </div>
         </div>
 
-        {/* Bottom Prompt Input Bar */}
-        <div className="border-t border-gray-800 bg-gray-900 p-6">
-          <div className="max-w-6xl mx-auto">
-            {/* Controls Row */}
-            <div className="flex items-center gap-4 mb-4">
-              {/* Model Selection */}
-              <div className="flex items-center gap-2">
-                <Settings className="w-4 h-4 text-gray-400" />
-                <Select value={settings.model} onValueChange={(value) => setSettings(prev => ({ ...prev, model: value }))}>
-                  <SelectTrigger className="w-40 bg-gray-800 border-gray-700 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-gray-800 border-gray-700">
-                    {modelOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value} className="text-white">
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Style Selection */}
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-gray-400" />
-                <Select value={settings.style} onValueChange={(value) => setSettings(prev => ({ ...prev, style: value }))}>
-                  <SelectTrigger className="w-32 bg-gray-800 border-gray-700 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-gray-800 border-gray-700">
-                    {styleOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value} className="text-white">
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Aspect Ratio */}
-              <div className="flex items-center gap-2">
-                <Grid3X3 className="w-4 h-4 text-gray-400" />
-                <Select value={settings.aspect_ratio} onValueChange={handleAspectRatioChange}>
-                  <SelectTrigger className="w-24 bg-gray-800 border-gray-700 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-gray-800 border-gray-700">
-                    {aspectRatioOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value} className="text-white">
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Image Size Display */}
-              <div className="text-sm text-gray-400">
-                {settings.width}×{settings.height}
-              </div>
-
-              {/* Reference Image Upload */}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-gray-400 hover:text-white"
-              >
-                <Upload className="w-4 h-4 mr-2" />
-                Reference
-              </Button>
-            </div>
-
-            {/* Prompt Input Row */}
-            <div className="flex items-center gap-4">
+        {/* Bottom Input Area */}
+        <div className="border-t border-gray-800 bg-[#1A1A1A] p-6">
+          <div className="max-w-4xl mx-auto">
+            {/* Input Field */}
+            <div className="relative mb-4">
               <Input
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="Describe an image and click generate..."
-                className="flex-1 bg-gray-800 border-gray-700 text-white placeholder-gray-400 h-12 text-base"
+                className="w-full bg-[#2A2A2A] border-gray-700 text-white placeholder-gray-500 pr-24 h-12 text-sm rounded-lg"
                 onKeyPress={(e) => {
                   if (e.key === 'Enter' && !isGenerating) {
                     handleGenerate();
@@ -485,35 +408,73 @@ const ImageGeneration = () => {
               <Button
                 onClick={handleGenerate}
                 disabled={!prompt.trim() || isGenerating || !currentUser}
-                className="bg-white text-black hover:bg-gray-200 px-8 h-12 font-medium"
+                className="absolute right-2 top-2 bg-white text-black hover:bg-gray-200 px-4 h-8 text-sm font-medium rounded-md"
               >
-                {isGenerating ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin mr-2"></div>
-                    Generating...
-                  </>
-                ) : (
-                  'Generate'
-                )}
+                {isGenerating ? 'Generating...' : 'Generate'}
+              </Button>
+            </div>
+
+            {/* Controls */}
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-4">
+                <Select value={settings.model} onValueChange={(value) => setSettings(prev => ({ ...prev, model: value }))}>
+                  <SelectTrigger className="w-32 bg-[#2A2A2A] border-gray-700 text-white h-8">
+                    <SelectValue placeholder="Image Model" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#2A2A2A] border-gray-700">
+                    <SelectItem value="flux_schnell" className="text-white">Flux Schnell</SelectItem>
+                    <SelectItem value="flux_dev" className="text-white">Flux Dev</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={settings.style} onValueChange={(value) => setSettings(prev => ({ ...prev, style: value }))}>
+                  <SelectTrigger className="w-32 bg-[#2A2A2A] border-gray-700 text-white h-8">
+                    <SelectValue placeholder="Image style" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#2A2A2A] border-gray-700">
+                    <SelectItem value="realistic" className="text-white">Realistic</SelectItem>
+                    <SelectItem value="cinematic" className="text-white">Cinematic</SelectItem>
+                    <SelectItem value="anime" className="text-white">Anime</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white h-8 px-3">
+                  <Upload className="w-4 h-4 mr-2" />
+                  Image prompt
+                </Button>
+
+                <Select value={settings.aspect_ratio} onValueChange={handleAspectRatioChange}>
+                  <SelectTrigger className="w-24 bg-[#2A2A2A] border-gray-700 text-white h-8">
+                    <SelectValue placeholder="aspect ratio" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#2A2A2A] border-gray-700">
+                    <SelectItem value="1:1" className="text-white">1:1</SelectItem>
+                    <SelectItem value="16:9" className="text-white">16:9</SelectItem>
+                    <SelectItem value="9:16" className="text-white">9:16</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <span className="text-gray-400 text-xs">image size</span>
+              </div>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-gray-400 hover:text-white"
+                onClick={() => setShowExamples(true)}
+              >
+                <ChevronUp className="w-4 h-4 mr-2" />
+                Show examples
               </Button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Show Examples Button */}
-      <Button
-        variant="ghost"
-        className="fixed bottom-6 right-6 bg-gray-800 hover:bg-gray-700 text-white border border-gray-700"
-        onClick={() => setShowExamples(true)}
-      >
-        Show Examples
-      </Button>
-
       {/* Examples Modal */}
       {showExamples && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 rounded-lg p-6 max-w-4xl w-full max-h-[80vh] overflow-y-auto">
+          <div className="bg-[#1A1A1A] rounded-lg p-6 max-w-4xl w-full max-h-[80vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold text-white">Example Prompts</h2>
               <Button
@@ -526,25 +487,19 @@ const ImageGeneration = () => {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {examplePrompts.map((example, index) => (
-                <Card key={index} className="bg-gray-800 border-gray-700 cursor-pointer hover:bg-gray-750 transition-colors" onClick={() => {
-                  setPrompt(example.prompt);
-                  setShowExamples(false);
-                }}>
-                  <CardContent className="p-4">
-                    {example.image && (
-                      <img
-                        src={example.image}
-                        alt="Example"
-                        className="w-full h-32 object-cover rounded mb-3"
-                      />
-                    )}
-                    <p className="text-sm text-gray-300 leading-relaxed">
-                      {example.prompt}
-                    </p>
-                  </CardContent>
-                </Card>
-              ))}
+              <div className="bg-[#2A2A2A] rounded-lg p-4 cursor-pointer hover:bg-[#333] transition-colors" onClick={() => {
+                setPrompt("A majestic golden lion with sleek fur prowls confidently through a rain-soaked metropolis at night, neon signs reflecting on wet asphalt as towering skyscrapers loom in the background, illuminated by dramatic cinematic lighting that highlights the predator's intense gaze and muscular frame against the urban jungle.");
+                setShowExamples(false);
+              }}>
+                <img
+                  src="/lovable-uploads/4b5b9e5c-903d-4279-b67b-506baae7c8f2.png"
+                  alt="Example"
+                  className="w-full h-32 object-cover rounded mb-3"
+                />
+                <p className="text-sm text-gray-300 leading-relaxed">
+                  A majestic golden lion with sleek fur prowls confidently through a rain-soaked metropolis at night...
+                </p>
+              </div>
             </div>
           </div>
         </div>
