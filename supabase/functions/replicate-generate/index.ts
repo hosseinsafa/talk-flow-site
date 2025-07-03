@@ -217,17 +217,17 @@ serve(async (req) => {
       }
 
       // Determine correct model path and settings
-      let modelPath = ""
-      
-      if (model === 'flux_dev') {
-        modelPath = "black-forest-labs/flux-dev"
-        input.guidance_scale = cfg_scale
-        input.num_inference_steps = steps
-      } else {
-        // Use flux-schnell 
-        modelPath = "black-forest-labs/flux-schnell"
-        input.num_inference_steps = 4
-      }
+      let version = ""
+
+if (model === 'flux_dev') {
+    version = "362f78965670d5c91c4084b3e52398969c87b3b01b3a2b0e6c7f9e6afd98b69b"
+    input.guidance_scale = cfg_scale
+    input.num_inference_steps = steps
+} else {
+    version = "f2ab8a5569070ad749f0c6ded6fcb7f70aa4aa370c88c7b13b3b42b3e2c7c9fb"
+    input.num_inference_steps = 4
+}
+
 
       // Set aspect ratio based on dimensions
       if (width === 1024 && height === 1024) {
@@ -250,12 +250,12 @@ serve(async (req) => {
       }
 
       console.log('=== REPLICATE API CALL DETAILS ===')
-      console.log('Model path:', modelPath)
+      console.log('Using version ID:', version)
       console.log('Input payload:', JSON.stringify(input, null, 2))
 
       // Use the correct Replicate SDK structure
       const requestPayload = {
-        model: modelPath,
+        version: version,
         input: input
       }
 
