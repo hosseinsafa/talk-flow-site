@@ -220,9 +220,7 @@ serve(async (req) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          version: model === 'flux_dev' ? 
-            "black-forest-labs/flux-dev" : 
-            "black-forest-labs/flux-schnell",
+          model: replicateModel,
           input: input
         }),
       })

@@ -508,7 +508,7 @@ const ImageGeneration = () => {
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="Describe an image and click generate..."
-                className="w-full bg-[#2A2A2A] border-gray-700 text-white placeholder-gray-500 pr-24 min-h-[80px] max-h-[200px] text-sm rounded-lg resize-none"
+                className="w-full bg-[#2A2A2A] border-gray-700 text-white placeholder-gray-500 pr-32 min-h-[120px] max-h-[300px] text-sm rounded-lg resize-none"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && e.ctrlKey && !isGenerating) {
                     handleGenerate();
@@ -519,7 +519,7 @@ const ImageGeneration = () => {
               <Button
                 onClick={handleGenerate}
                 disabled={!prompt.trim() || isGenerating || !currentUser}
-                className="absolute right-2 top-2 bg-white text-black hover:bg-gray-200 px-4 h-8 text-sm font-medium rounded-md"
+                className="absolute right-3 top-3 bg-white text-black hover:bg-gray-200 px-4 h-8 text-sm font-medium rounded-md"
               >
                 {isGenerating ? 'Generating...' : 'Generate'}
               </Button>
