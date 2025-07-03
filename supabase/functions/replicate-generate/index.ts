@@ -17,28 +17,43 @@ interface GenerationRequest {
   model: string
 }
 
+// Model version IDs for Replicate API
+const MODEL_VERSIONS = {
+  'flux_schnell': 'f2ab8a5569070ad749f0c6ded6fcb7f70aa4aa370c88c7b13b3b42b3e2c7c9fb',
+  'flux_dev': '362f78965670d5c91c4084b3e52398969c87b3b01b3a2b0e6c7f9e6afd98b69b'
+}
+
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 serve(async (req) => {
-  console.log('=== FUNCTION STARTED ===')
+  console.log('=== REPLICATE GENERATE FUNCTION STARTED ===')
   console.log('Request method:', req.method)
-  console.log('Request URL:', req.url)
-  console.log('Request headers:', Object.fromEntries(req.headers.entries()))
   
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    console.log('=== CORS PREFLIGHT REQUEST ===')
+    console.log('Handling CORS preflight request')
     return new Response(null, { headers: corsHeaders })
   }
 
   try {
-    console.log('=== PROCESSING POST REQUEST ===')
-    
+    // Parse request body
+    const requestBody: GenerationRequest = await req.json()
+    console.log('Request received:', JSON.stringify(requestBody, null, 2))
+
+    // Validate required fields
+    if (!requestBody.prompt) {
+      console.error('Missing prompt in request')
+      return new Response(
+        JSON.stringify({ error: 'Prompt is required' }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
+    }
+
     // Get and validate authorization header
     const authHeader = req.headers.get('Authorization')
-    console.log('Auth header present:', !!authHeader)
-    console.log('Auth header starts with Bearer:', authHeader?.startsWith('Bearer '))
-    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       console.error('Invalid or missing Authorization header')
       return new Response(
@@ -55,14 +70,11 @@ serve(async (req) => {
 
     // Extract JWT token
     const jwtToken = authHeader.replace('Bearer ', '')
-    console.log('JWT token extracted, length:', jwtToken.length)
+    console.log('JWT token extracted')
 
     // Create Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
     const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')
-    
-    console.log('Supabase URL present:', !!supabaseUrl)
-    console.log('Supabase Key present:', !!supabaseKey)
     
     if (!supabaseUrl || !supabaseKey) {
       console.error('Missing Supabase configuration')
@@ -87,8 +99,8 @@ serve(async (req) => {
       }
     })
 
-    console.log('=== VERIFYING USER AUTHENTICATION ===')
     // Verify JWT token and get user
+    console.log('Verifying user authentication')
     const { data: userData, error: authError } = await supabaseClient.auth.getUser(jwtToken)
     
     if (authError || !userData.user) {
@@ -108,10 +120,7 @@ serve(async (req) => {
     const user = userData.user
     console.log('User authenticated successfully:', user.id)
 
-    console.log('=== PARSING REQUEST BODY ===')
-    const body: GenerationRequest = await req.json()
-    console.log('Request body received:', JSON.stringify(body, null, 2))
-
+    // Extract request parameters
     const {
       prompt,
       negative_prompt = '',
@@ -120,26 +129,18 @@ serve(async (req) => {
       width = 1024,
       height = 1024,
       model
-    } = body
+    } = requestBody
 
-    if (!prompt) {
-      console.error('Missing prompt in request')
-      return new Response(
-        JSON.stringify({ error: 'Prompt is required' }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      )
-    }
+    console.log('Generation parameters:', {
+      prompt,
+      model,
+      dimensions: `${width}x${height}`,
+      steps,
+      cfg_scale
+    })
 
-    console.log('Starting image generation for user:', user.id)
-    console.log('Model:', model)
-    console.log('Prompt:', prompt)
-    console.log('Requested dimensions:', width, 'x', height)
-
-    console.log('=== CREATING DATABASE RECORD ===')
     // Create database record
+    console.log('Creating database record')
     const { data: generationRecord, error: insertError } = await supabaseClient
       .from('image_generations')
       .insert({
@@ -169,14 +170,10 @@ serve(async (req) => {
 
     console.log('Created generation record:', generationRecord.id)
 
-    console.log('=== CHECKING REPLICATE API KEY ===')
-    // Get Replicate API key - Check both possible names
-    const REPLICATE_API_KEY = Deno.env.get('REPLICATE_API_KEY') || Deno.env.get('REPLICATE_API_TOKEN')
-    console.log('REPLICATE_API_KEY present:', !!REPLICATE_API_KEY)
-    console.log('REPLICATE_API_TOKEN present:', !!Deno.env.get('REPLICATE_API_TOKEN'))
-    
+    // Get Replicate API key
+    const REPLICATE_API_KEY = Deno.env.get('REPLICATE_API_KEY')
     if (!REPLICATE_API_KEY) {
-      console.error('REPLICATE_API_KEY not found in environment')
+      console.error('REPLICATE_API_KEY not found')
       await supabaseClient
         .from('image_generations')
         .update({ 
@@ -198,36 +195,24 @@ serve(async (req) => {
       )
     }
 
-    console.log('REPLICATE_API_KEY found, length:', REPLICATE_API_KEY.length)
-
     try {
-      console.log('=== UPDATING STATUS TO PROCESSING ===')
       // Update status to processing
       await supabaseClient
         .from('image_generations')
         .update({ status: 'processing' })
         .eq('id', generationRecord.id)
 
-      // Prepare input payload
-      let input: any = {
+      // Get correct model version
+      const modelVersion = MODEL_VERSIONS[model as keyof typeof MODEL_VERSIONS] || MODEL_VERSIONS.flux_schnell
+      console.log('Using model version:', modelVersion)
+
+      // Prepare input for Replicate API
+      const input: any = {
         prompt: prompt,
         num_outputs: 1,
         output_format: "webp",
         output_quality: 90
       }
-
-      // Determine correct model path and settings
-      let version = ""
-
-if (model === 'flux_dev') {
-    version = "362f78965670d5c91c4084b3e52398969c87b3b01b3a2b0e6c7f9e6afd98b69b"
-    input.guidance_scale = cfg_scale
-    input.num_inference_steps = steps
-} else {
-    version = "f2ab8a5569070ad749f0c6ded6fcb7f70aa4aa370c88c7b13b3b42b3e2c7c9fb"
-    input.num_inference_steps = 4
-}
-
 
       // Set aspect ratio based on dimensions
       if (width === 1024 && height === 1024) {
@@ -244,58 +229,59 @@ if (model === 'flux_dev') {
         input.aspect_ratio = "1:1"
       }
 
+      // Add model-specific parameters
+      if (model === 'flux_dev') {
+        input.guidance_scale = cfg_scale
+        input.num_inference_steps = steps
+      } else {
+        input.num_inference_steps = 4
+      }
+
       // Add negative prompt if provided
       if (negative_prompt && negative_prompt.trim()) {
         input.negative_prompt = negative_prompt
       }
 
-      console.log('=== REPLICATE API CALL DETAILS ===')
-      console.log('Using version ID:', version)
-      console.log('Input payload:', JSON.stringify(input, null, 2))
-
-      // Use the correct Replicate SDK structure
-      const requestPayload = {
-        version: version,
+      // Prepare Replicate API payload - ONLY version and input
+      const replicatePayload = {
+        version: modelVersion,
         input: input
       }
 
-      console.log('Final request payload to Replicate:', JSON.stringify(requestPayload, null, 2))
+      console.log('Replicate API payload:', JSON.stringify(replicatePayload, null, 2))
 
-      // Retry logic for rate limiting
-      let retryCount = 0;
-      const maxRetries = 3;
-      let response;
+      // Call Replicate API with retry logic
+      let retryCount = 0
+      const maxRetries = 3
+      let response
 
-      console.log('=== CALLING REPLICATE API ===')
       while (retryCount <= maxRetries) {
         try {
-          // Call Replicate REST API with SDK structure
+          console.log(`Calling Replicate API (attempt ${retryCount + 1})`)
           response = await fetch('https://api.replicate.com/v1/predictions', {
             method: 'POST',
             headers: {
               'Authorization': `Token ${REPLICATE_API_KEY}`,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify(requestPayload),
+            body: JSON.stringify(replicatePayload),
           })
 
-          console.log('=== REPLICATE API RESPONSE ===')
-          console.log('Response status:', response.status)
-          console.log('Response headers:', Object.fromEntries(response.headers.entries()))
+          console.log('Replicate API response status:', response.status)
 
           // Handle rate limiting
           if (response.status === 429) {
-            const retryAfter = response.headers.get('retry-after') || response.headers.get('x-ratelimit-reset-after');
-            const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : Math.pow(2, retryCount) * 1000;
+            const retryAfter = response.headers.get('retry-after') || response.headers.get('x-ratelimit-reset-after')
+            const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : Math.pow(2, retryCount) * 1000
 
             if (retryCount < maxRetries) {
-              console.log(`Rate limited (429). Retrying in ${waitTime}ms (attempt ${retryCount + 1}/${maxRetries})`);
-              await sleep(waitTime);
-              retryCount++;
-              continue;
+              console.log(`Rate limited. Retrying in ${waitTime}ms (attempt ${retryCount + 1}/${maxRetries})`)
+              await sleep(waitTime)
+              retryCount++
+              continue
             } else {
-              console.error('Max retries exceeded for rate limiting');
-              const errorMessage = 'Request was throttled. Please try again in a few seconds.';
+              console.error('Max retries exceeded for rate limiting')
+              const errorMessage = 'Request was throttled. Please try again in a few seconds.'
               
               await supabaseClient
                 .from('image_generations')
@@ -325,37 +311,27 @@ if (model === 'flux_dev') {
           }
 
           // If not rate limited, break out of retry loop
-          break;
+          break
 
         } catch (fetchError) {
-          console.error('Network error during API call:', fetchError);
+          console.error('Network error during API call:', fetchError)
           if (retryCount < maxRetries) {
-            console.log(`Network error. Retrying in ${1000 * (retryCount + 1)}ms...`);
-            await sleep(1000 * (retryCount + 1));
-            retryCount++;
-            continue;
+            console.log(`Network error. Retrying in ${1000 * (retryCount + 1)}ms...`)
+            await sleep(1000 * (retryCount + 1))
+            retryCount++
+            continue
           } else {
-            throw fetchError;
+            throw fetchError
           }
         }
       }
 
       const responseText = await response.text()
-      console.log('Raw response text:', responseText)
+      console.log('Replicate API raw response:', responseText)
 
-      if (!response.ok && response.status !== 429) {
-        console.error('=== REPLICATE API ERROR ===')
-        console.error('Status:', response.status)
-        console.error('Response:', responseText)
+      if (!response.ok) {
+        console.error('Replicate API error:', response.status, responseText)
         
-        // Try to parse error for more details
-        try {
-          const errorData = JSON.parse(responseText)
-          console.error('Parsed error data:', JSON.stringify(errorData, null, 2))
-        } catch (parseError) {
-          console.error('Could not parse error response as JSON')
-        }
-
         await supabaseClient
           .from('image_generations')
           .update({ 
@@ -381,10 +357,9 @@ if (model === 'flux_dev') {
       let result
       try {
         result = JSON.parse(responseText)
-        console.log('=== REPLICATE SUCCESS RESPONSE ===')
-        console.log('Parsed result:', JSON.stringify(result, null, 2))
+        console.log('Parsed Replicate response:', JSON.stringify(result, null, 2))
       } catch (parseError) {
-        console.error('Failed to parse success response:', parseError)
+        console.error('Failed to parse Replicate response:', parseError)
         throw new Error(`Failed to parse Replicate response: ${responseText}`)
       }
 
@@ -395,9 +370,9 @@ if (model === 'flux_dev') {
         throw new Error('No prediction ID returned from Replicate')
       }
 
-      console.log('Prediction started with ID:', predictionId)
+      console.log('Prediction started successfully with ID:', predictionId)
 
-      // Update with prediction ID
+      // Update database with prediction ID
       await supabaseClient
         .from('image_generations')
         .update({ 
@@ -413,7 +388,7 @@ if (model === 'flux_dev') {
           generation_id: generationRecord.id,
           prediction_id: predictionId,
           status: 'processing',
-          message: 'Image generation started. Use the generation_id to check status.'
+          message: 'Image generation started successfully. Use the generation_id to check status.'
         }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -421,10 +396,7 @@ if (model === 'flux_dev') {
       )
 
     } catch (error) {
-      console.error('=== GENERATION ERROR ===')
-      console.error('Error type:', error.constructor.name)
-      console.error('Error message:', error.message)
-      console.error('Error stack:', error.stack)
+      console.error('Generation error:', error)
       
       // Update status to failed
       await supabaseClient
@@ -450,10 +422,7 @@ if (model === 'flux_dev') {
     }
 
   } catch (error) {
-    console.error('=== MAIN FUNCTION ERROR ===')
-    console.error('Error type:', error.constructor.name)
-    console.error('Error message:', error.message)
-    console.error('Error stack:', error.stack)
+    console.error('Main function error:', error)
     
     return new Response(
       JSON.stringify({ error: 'Internal server error', details: error.message }),
