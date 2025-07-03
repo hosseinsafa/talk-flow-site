@@ -1,8 +1,15 @@
 
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import { ChatSession } from './useChat';
+import { useAuth } from '@/hooks/useAuth';
+import { Message } from '@/hooks/useChat';
+
+export interface ChatSession {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
 
 export const useChatSessions = () => {
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
@@ -27,25 +34,17 @@ export const useChatSessions = () => {
     }
   };
 
-  useEffect(() => {
-    if (user) {
-      loadChatSessions();
-    }
-  }, [user]);
-
   const createNewSession = async (firstMessage: string): Promise<string | null> => {
     if (!user) return null;
 
     try {
-      const title = firstMessage.length > 50 
-        ? firstMessage.substring(0, 50) + '...' 
-        : firstMessage;
-
+      const title = firstMessage.length > 50 ? firstMessage.substring(0, 50) + '...' : firstMessage;
+      
       const { data, error } = await supabase
         .from('chat_sessions')
         .insert({
           user_id: user.id,
-          title: title
+          title
         })
         .select()
         .single();
@@ -53,7 +52,7 @@ export const useChatSessions = () => {
       if (error) throw error;
       return data.id;
     } catch (error) {
-      console.error('Error creating session:', error);
+      console.error('Error creating new session:', error);
       return null;
     }
   };
@@ -67,16 +66,17 @@ export const useChatSessions = () => {
 
       if (error) throw error;
     } catch (error) {
-      console.error('Error updating session:', error);
+      console.error('Error updating session timestamp:', error);
     }
   };
 
-  const loadChatMessages = async (sessionId: string) => {
+  const loadChatMessages = async (sessionId: string, messageType: string = 'chat'): Promise<Message[]> => {
     try {
       const { data, error } = await supabase
         .from('chat_messages')
         .select('*')
         .eq('session_id', sessionId)
+        .eq('message_type', messageType)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
@@ -88,14 +88,17 @@ export const useChatSessions = () => {
         timestamp: new Date(msg.created_at)
       }));
     } catch (error) {
-      console.error('Error loading messages:', error);
+      console.error('Error loading chat messages:', error);
       return [];
     }
   };
 
+  useEffect(() => {
+    loadChatSessions();
+  }, [user]);
+
   return {
     chatSessions,
-    setChatSessions,
     currentSessionId,
     setCurrentSessionId,
     isNewChat,

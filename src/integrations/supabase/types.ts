@@ -14,6 +14,7 @@ export type Database = {
           content: string
           created_at: string
           id: string
+          message_type: string | null
           role: string
           session_id: string
         }
@@ -21,6 +22,7 @@ export type Database = {
           content: string
           created_at?: string
           id?: string
+          message_type?: string | null
           role: string
           session_id: string
         }
@@ -28,6 +30,7 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
+          message_type?: string | null
           role?: string
           session_id?: string
         }
@@ -119,6 +122,39 @@ export type Database = {
           steps?: number | null
           user_id?: string
           width?: number | null
+        }
+        Relationships: []
+      }
+      image_library: {
+        Row: {
+          aspect_ratio: string | null
+          created_at: string | null
+          id: string
+          image_url: string | null
+          model_used: string | null
+          prompt: string | null
+          session_id: string | null
+          user_id: string
+        }
+        Insert: {
+          aspect_ratio?: string | null
+          created_at?: string | null
+          id?: string
+          image_url?: string | null
+          model_used?: string | null
+          prompt?: string | null
+          session_id?: string | null
+          user_id: string
+        }
+        Update: {
+          aspect_ratio?: string | null
+          created_at?: string | null
+          id?: string
+          image_url?: string | null
+          model_used?: string | null
+          prompt?: string | null
+          session_id?: string | null
+          user_id?: string
         }
         Relationships: []
       }

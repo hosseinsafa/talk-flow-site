@@ -1,3 +1,4 @@
+
 import { useState, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -28,14 +29,15 @@ export const useChat = () => {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  const saveMessage = async (sessionId: string, content: string, role: 'user' | 'assistant') => {
+  const saveMessage = async (sessionId: string, content: string, role: 'user' | 'assistant', messageType: string = 'chat') => {
     try {
       const { error } = await supabase
         .from('chat_messages')
         .insert({
           session_id: sessionId,
           content,
-          role
+          role,
+          message_type: messageType
         });
 
       if (error) throw error;
@@ -63,14 +65,11 @@ export const useChat = () => {
 
       if (error) {
         console.error('Error updating usage count:', error);
-        // Don't throw the error, just log it so chat continues to work
-        // even if usage tracking fails
       } else {
         console.log('✅ Usage count updated successfully');
       }
     } catch (error) {
       console.error('Error in updateUsageCount:', error);
-      // Don't throw the error, just log it
     }
   };
 

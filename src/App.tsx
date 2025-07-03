@@ -1,5 +1,4 @@
 
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -12,6 +11,7 @@ import Home from "./pages/Home";
 import Chat from "./pages/Chat";
 import FullScreenChat from "./pages/FullScreenChat";
 import ImageGeneration from "./pages/ImageGeneration";
+import ImageLibrary from "./pages/ImageLibrary";
 import VideoGeneration from "./pages/VideoGeneration";
 import Enhance from "./pages/Enhance";
 import Auth from "./pages/Auth";
@@ -60,6 +60,11 @@ function App() {
                     <ImageGeneration />
                   </ProtectedRoute>
                 } />
+                <Route path="/library" element={
+                  <ProtectedRoute>
+                    <ImageLibrary />
+                  </ProtectedRoute>
+                } />
                 <Route path="/video-generation" element={
                   <ProtectedRoute>
                     <VideoGeneration />
@@ -86,4 +91,3 @@ function App() {
 }
 
 export default App;
-

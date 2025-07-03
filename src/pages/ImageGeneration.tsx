@@ -58,7 +58,7 @@ const ImageGeneration = () => {
     height: 1024
   });
 
-  // Load generation history
+  // Load only image generation history (not chat messages)
   useEffect(() => {
     const loadGenerationHistory = async () => {
       if (!currentUser) return;
@@ -112,7 +112,7 @@ const ImageGeneration = () => {
     }
   };
 
-  // Generate image
+  // Generate image using the replicate-generate function
   const handleGenerate = async () => {
     if (!prompt.trim()) {
       toast.error('Please enter a prompt');
@@ -189,6 +189,10 @@ const ImageGeneration = () => {
           };
           setGeneratedImages(prev => [newImage, ...prev]);
           setSelectedImageIndex(0);
+          
+          // Save to image library
+          await saveToImageLibrary(data.prompt, data.image_url, settings.model, settings.aspect_ratio);
+          
           toast.success('Image generated successfully!');
           setIsGenerating(false);
           setCurrentGenerationId(null);
@@ -220,6 +224,25 @@ const ImageGeneration = () => {
     };
 
     poll();
+  };
+
+  // Save to image library
+  const saveToImageLibrary = async (prompt: string, imageUrl: string, modelUsed: string, aspectRatio: string) => {
+    if (!currentUser) return;
+
+    try {
+      await supabase
+        .from('image_library')
+        .insert({
+          user_id: currentUser.id,
+          prompt: prompt,
+          image_url: imageUrl,
+          model_used: modelUsed,
+          aspect_ratio: aspectRatio
+        });
+    } catch (error) {
+      console.error('Error saving to image library:', error);
+    }
   };
 
   // Delete image
@@ -333,7 +356,7 @@ const ImageGeneration = () => {
                     {/* Tags */}
                     <div className="flex items-center gap-2 mb-4">
                       <Badge variant="outline" className="text-xs bg-gray-800 border-gray-700 text-gray-300">
-                        Image-01
+                        {image.model_type || 'Image-01'}
                       </Badge>
                       <Badge variant="outline" className="text-xs bg-gray-800 border-gray-700 text-gray-300">
                         Enable Optimization

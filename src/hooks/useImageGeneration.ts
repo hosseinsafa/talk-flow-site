@@ -30,7 +30,6 @@ export const useImageGeneration = () => {
     console.log('🔍 Checking if text is image generation request:', text);
     const lowerText = text.toLowerCase();
     
-    // Enhanced patterns for image generation detection
     const persianPatterns = [
       /تصویر.*بساز/i,
       /عکس.*بساز/i,
@@ -76,19 +75,13 @@ export const useImageGeneration = () => {
       console.log('🚀 === STARTING CHATGPT-QUALITY IMAGE GENERATION ===');
       console.log('📝 Original prompt:', prompt);
       
-      console.log('📡 Calling ChatGPT-quality generate-image function...');
       const functionResponse = await supabase.functions.invoke('generate-image', {
         body: {
           prompt: prompt
         }
       });
 
-      console.log('📊 ChatGPT-quality function response:', {
-        data: functionResponse.data,
-        error: functionResponse.error,
-        hasData: !!functionResponse.data,
-        hasError: !!functionResponse.error
-      });
+      console.log('📊 ChatGPT-quality function response:', functionResponse);
 
       if (functionResponse.error) {
         console.error('❌ Function error:', functionResponse.error);
@@ -101,7 +94,6 @@ export const useImageGeneration = () => {
       }
 
       const responseData: ImageGenerationResponse = functionResponse.data;
-      console.log('📋 ChatGPT-quality response data:', responseData);
 
       if (responseData.status !== 'success') {
         console.error('❌ Function returned error status:', responseData);
@@ -113,32 +105,52 @@ export const useImageGeneration = () => {
         throw new Error('No primary image URL returned from ChatGPT-quality DALL·E 3');
       }
 
-      const primaryImageUrl = responseData.image_url;
-      const allImageUrls = responseData.image_urls || [primaryImageUrl];
-      const generationCount = responseData.generation_count || 1;
-      const enhancedPrompt = responseData.enhanced_prompt || prompt;
-      const settings = responseData.settings;
-      
-      console.log('🖼️ ChatGPT-quality generation results:', {
-        primaryImageUrl: primaryImageUrl.substring(0, 50) + '...',
-        totalGenerated: generationCount,
-        allUrls: allImageUrls.length,
-        enhancedPrompt: enhancedPrompt.substring(0, 100) + '...',
-        settings: settings
-      });
-      
-      // Save to database with ChatGPT-quality metadata
-      await saveImageGeneration(enhancedPrompt, primaryImageUrl, {
-        generation_count: generationCount,
-        all_urls: allImageUrls,
-        settings: settings
-      });
-      
       console.log('✅ === CHATGPT-QUALITY IMAGE GENERATION COMPLETED ===');
-      return primaryImageUrl;
+      return responseData.image_url;
       
     } catch (error) {
       console.error('❌ Error in ChatGPT-quality generateImage:', error);
+      throw error;
+    }
+  };
+
+  const saveImageToLibrary = async (
+    sessionId: string,
+    prompt: string, 
+    imageUrl: string, 
+    modelUsed: string,
+    aspectRatio: string
+  ) => {
+    if (!user) {
+      console.log('⚠️ No user found, skipping image library save');
+      return;
+    }
+
+    try {
+      console.log('💾 Saving image to library...');
+      
+      const { data, error } = await supabase
+        .from('image_library')
+        .insert({
+          user_id: user.id,
+          session_id: sessionId,
+          prompt: prompt,
+          image_url: imageUrl,
+          model_used: modelUsed,
+          aspect_ratio: aspectRatio
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Image library save error:', error);
+        throw error;
+      }
+
+      console.log('✅ Image saved to library:', data.id);
+      return data;
+    } catch (error) {
+      console.error('❌ Error saving image to library:', error);
       throw error;
     }
   };
@@ -165,7 +177,6 @@ export const useImageGeneration = () => {
     try {
       console.log('💾 Saving ChatGPT-quality image generation to database...');
       
-      // Create enhanced prompt note for database
       const promptNote = metadata?.generation_count 
         ? `ChatGPT-quality generation (${metadata.generation_count} images generated at ${metadata.settings?.size || '1024x1024'})`
         : 'Single ChatGPT-quality generation';
@@ -182,7 +193,6 @@ export const useImageGeneration = () => {
           height: 1024,
           steps: 50,
           cfg_scale: 7.0,
-          // Store metadata in error_message field as JSON string for now
           error_message: metadata ? JSON.stringify({
             type: 'chatgpt_quality_metadata',
             generation_count: metadata.generation_count,
@@ -211,6 +221,7 @@ export const useImageGeneration = () => {
     detectLanguage,
     isImageGenerationRequest,
     generateImage,
+    saveImageToLibrary,
     saveImageGeneration
   };
 };

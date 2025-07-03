@@ -15,7 +15,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({ selectedModel, setSelectedModel
   const isMobile = useIsMobile();
 
   return (
-    <div className="flex items-center justify-between p-4 border-b border-white/10 bg-[#212121] safe-area-top">
+    <div className="flex items-center justify-between p-4 border-b border-white/10 bg-[#212121] sticky top-0 z-10">
       <div className="flex items-center gap-3">
         <Button
           variant="ghost"

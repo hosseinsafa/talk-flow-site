@@ -13,8 +13,8 @@ import { useStreamingChat } from '@/hooks/useStreamingChat';
 
 const StreamingChatInterface = () => {
   const [input, setInput] = useState('');
-  const [selectedModel, setSelectedModel] = useState('gpt-4o-mini'); // Default to GPT-4o Mini
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [selectedModel, setSelectedModel] = useState('gpt-4o-mini');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -50,7 +50,8 @@ const StreamingChatInterface = () => {
   const {
     detectLanguage,
     isImageGenerationRequest,
-    generateImage
+    generateImage,
+    saveImageToLibrary
   } = useImageGeneration();
 
   const { streamChatResponse } = useStreamingChat();
@@ -76,7 +77,8 @@ const StreamingChatInterface = () => {
     abortStreaming();
     setCurrentSessionId(sessionId);
     setIsNewChat(false);
-    const loadedMessages = await loadChatMessages(sessionId);
+    // Load only chat messages (not image messages)
+    const loadedMessages = await loadChatMessages(sessionId, 'chat');
     setMessages(loadedMessages);
     setSidebarOpen(false);
   };
@@ -111,15 +113,13 @@ const StreamingChatInterface = () => {
         await loadChatSessions();
       }
 
-      await saveMessage(sessionId, currentInput, 'user');
+      await saveMessage(sessionId, currentInput, 'user', 'chat');
 
       const userLanguage = detectLanguage(currentInput);
       
-      // Check if this is an image generation request
       if (isImageGenerationRequest(currentInput)) {
         console.log('🎨 === IMAGE GENERATION REQUEST DETECTED ===');
         
-        // Add loading message
         const loadingMessageId = `loading_${Date.now()}`;
         const loadingMessage: Message = {
           id: loadingMessageId,
@@ -131,13 +131,10 @@ const StreamingChatInterface = () => {
           isLoading: true
         };
         
-        console.log('➕ Adding loading message:', loadingMessageId);
         addMessage(loadingMessage);
 
         try {
-          console.log('🚀 Starting image generation for prompt:', currentInput);
           const imageUrl = await generateImage(currentInput);
-          console.log('✅ Image generated successfully, URL:', imageUrl);
           
           if (!imageUrl) {
             throw new Error('No image URL returned from generation');
@@ -154,18 +151,15 @@ const StreamingChatInterface = () => {
             isLoading: false
           };
 
-          console.log('🖼️ Updating message with image:', {
-            loadingId: loadingMessageId,
-            imageUrl: imageUrl,
-            messageId: imageMessage.id
-          });
-          
           updateMessage(loadingMessageId, imageMessage);
 
-          await saveMessage(sessionId, imageMessage.content, 'assistant');
+          // Save to chat messages with image type
+          await saveMessage(sessionId, imageMessage.content, 'assistant', 'image');
+          
+          // Save to image library for global access
+          await saveImageToLibrary(sessionId, currentInput, imageUrl, 'dall-e-3', '1:1');
+          
           await updateUsageCount();
-
-          console.log('🎉 === IMAGE GENERATION COMPLETED ===');
 
         } catch (imageError) {
           console.error('❌ Image generation error:', imageError);
@@ -181,7 +175,7 @@ const StreamingChatInterface = () => {
           };
 
           updateMessage(loadingMessageId, errorMessage);
-          await saveMessage(sessionId, errorMessage.content, 'assistant');
+          await saveMessage(sessionId, errorMessage.content, 'assistant', 'chat');
         }
       } else {
         console.log('💬 === STARTING TEXT RESPONSE STREAMING ===');
@@ -214,7 +208,7 @@ const StreamingChatInterface = () => {
   };
 
   return (
-    <div className="flex h-screen bg-[#212121] text-white">
+    <div className="flex h-screen bg-[#212121] text-white relative">
       <ChatSidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -224,7 +218,7 @@ const StreamingChatInterface = () => {
         onSelectSession={selectSession}
       />
 
-      <div className="flex flex-col flex-1 relative">
+      <div className="flex flex-col flex-1 min-w-0">
         <ChatHeader
           selectedModel={selectedModel}
           setSelectedModel={setSelectedModel}
