@@ -185,9 +185,7 @@ serve(async (req) => {
         .update({ status: 'processing' })
         .eq('id', generationRecord.id)
 
-      // Prepare input payload - ONLY use aspect_ratio, NO width/height
-      let modelName = ""
-      let modelVersion = ""
+      // Prepare input payload with aspect_ratio only
       let input: any = {
         prompt: prompt,
         num_outputs: 1,
@@ -195,7 +193,10 @@ serve(async (req) => {
         output_quality: 90
       }
 
-      // Determine model and version
+      // Determine model and correct settings
+      let modelName = ""
+      let modelVersion = ""
+      
       if (model === 'flux_dev') {
         modelName = "black-forest-labs/flux-dev"
         modelVersion = "362f78965670d5c91c4084b3e52398969c87b3b01b3a2b0e6c7f9e6afd98b69b"
@@ -208,7 +209,7 @@ serve(async (req) => {
         input.num_inference_steps = 4
       }
 
-      // Set ONLY aspect_ratio - remove width/height entirely
+      // Set aspect ratio based on dimensions
       if (width === 1024 && height === 1024) {
         input.aspect_ratio = "1:1"
       } else if (width === 1280 && height === 720) {
@@ -220,7 +221,6 @@ serve(async (req) => {
       } else if (width === 768 && height === 1024) {
         input.aspect_ratio = "3:4"
       } else {
-        // Default to 1:1 if dimensions don't match standard ratios
         input.aspect_ratio = "1:1"
       }
 
@@ -232,8 +232,9 @@ serve(async (req) => {
       console.log('=== REPLICATE API CALL DETAILS ===')
       console.log('Model name:', modelName)
       console.log('Model version:', modelVersion)
-      console.log('Input payload (NO width/height):', JSON.stringify(input, null, 2))
+      console.log('Input payload:', JSON.stringify(input, null, 2))
 
+      // Fixed request payload structure
       const requestPayload = {
         model: modelName,
         version: modelVersion,
@@ -266,7 +267,7 @@ serve(async (req) => {
           // Handle rate limiting
           if (response.status === 429) {
             const retryAfter = response.headers.get('retry-after') || response.headers.get('x-ratelimit-reset-after');
-            const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : Math.pow(2, retryCount) * 1000; // Exponential backoff
+            const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : Math.pow(2, retryCount) * 1000;
 
             if (retryCount < maxRetries) {
               console.log(`Rate limited (429). Retrying in ${waitTime}ms (attempt ${retryCount + 1}/${maxRetries})`);
