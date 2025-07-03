@@ -1,5 +1,3 @@
-
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -261,6 +259,7 @@ serve(async (req) => {
       }
 
       console.log('Full request payload:', JSON.stringify(requestPayload, null, 2))
+      console.log("PAYLOAD SENT TO REPLICATE:", JSON.stringify(requestPayload, null, 2))
 
       // Retry logic for rate limiting
       let retryCount = 0;
@@ -465,4 +464,3 @@ serve(async (req) => {
     )
   }
 })
-
