@@ -1,4 +1,5 @@
 
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -93,6 +94,8 @@ serve(async (req) => {
     console.log('User authenticated successfully:', user.id)
 
     const body: GenerationRequest = await req.json()
+    console.log('Request body received:', JSON.stringify(body, null, 2))
+
     const {
       prompt,
       negative_prompt = '',
@@ -151,6 +154,7 @@ serve(async (req) => {
     // Get Replicate API key
     const REPLICATE_API_KEY = Deno.env.get('REPLICATE_API_KEY')
     if (!REPLICATE_API_KEY) {
+      console.error('REPLICATE_API_KEY not found in environment')
       await supabaseClient
         .from('image_generations')
         .update({ 
@@ -172,6 +176,8 @@ serve(async (req) => {
       )
     }
 
+    console.log('REPLICATE_API_KEY found, length:', REPLICATE_API_KEY.length)
+
     try {
       // Update status to processing
       await supabaseClient
@@ -179,45 +185,37 @@ serve(async (req) => {
         .update({ status: 'processing' })
         .eq('id', generationRecord.id)
 
-      // Determine Replicate model based on selected model
-      let replicateModel = "black-forest-labs/flux-schnell"
-      if (model === 'flux_dev') {
-        replicateModel = "black-forest-labs/flux-dev"
-      }
-
-      console.log('Using Replicate model:', replicateModel)
-
-      // Prepare input for Replicate - fix the input format
-      const input: any = {
+      // Use simple dimensions for testing
+      let modelVersion = ""
+      let input: any = {
         prompt: prompt,
         num_outputs: 1,
         output_format: "webp",
         output_quality: 90
       }
 
-      // Set dimensions based on aspect ratio
-      if (width === 1024 && height === 1024) {
-        // 1:1 aspect ratio
-        input.aspect_ratio = "1:1"
-      } else if (width === 1280 && height === 720) {
-        // 16:9 aspect ratio
-        input.aspect_ratio = "16:9"
-      } else if (width === 720 && height === 1280) {
-        // 9:16 aspect ratio
-        input.aspect_ratio = "9:16"
-      } else {
-        // Fallback to custom dimensions
-        input.width = width
-        input.height = height
-      }
-
-      // Add model-specific parameters
+      // Determine model and version
       if (model === 'flux_dev') {
+        modelVersion = "black-forest-labs/flux-dev:362f78965670d5c91c4084b3e52398969c87b3b01b3a2b0e6c7f9e6afd98b69b"
         input.guidance_scale = cfg_scale
         input.num_inference_steps = steps
       } else {
-        // Flux Schnell has fixed parameters
+        // Use flux-schnell with correct version
+        modelVersion = "black-forest-labs/flux-schnell:f2ab8a5569070ad749f0c6ded6fcb7f70aa4aa370c88c7b13b3b42b3e2c7c9fb"
         input.num_inference_steps = 4
+      }
+
+      // Set dimensions - use simple approach first
+      if (width === 1024 && height === 1024) {
+        input.aspect_ratio = "1:1"
+      } else if (width === 1280 && height === 720) {
+        input.aspect_ratio = "16:9"
+      } else if (width === 720 && height === 1280) {
+        input.aspect_ratio = "9:16"
+      } else {
+        // For testing, let's use specific dimensions
+        input.width = width
+        input.height = height
       }
 
       // Add negative prompt if provided
@@ -225,37 +223,88 @@ serve(async (req) => {
         input.negative_prompt = negative_prompt
       }
 
-      console.log('Replicate input payload:', JSON.stringify(input, null, 2))
+      console.log('=== REPLICATE API CALL DETAILS ===')
+      console.log('Model version:', modelVersion)
+      console.log('Input payload:', JSON.stringify(input, null, 2))
 
-      // Call Replicate API with correct format
+      const requestPayload = {
+        version: modelVersion,
+        input: input
+      }
+
+      console.log('Full request payload:', JSON.stringify(requestPayload, null, 2))
+
+      // Call Replicate API
       const response = await fetch('https://api.replicate.com/v1/predictions', {
         method: 'POST',
         headers: {
           'Authorization': `Token ${REPLICATE_API_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          version: replicateModel === "black-forest-labs/flux-schnell" 
-            ? "f2ab8a5569070ad749f0c6ded6fcb7f70aa4aa370c88c7b13b3b42b3e2c7c9fb"
-            : "dev",
-          input: input
-        }),
+        body: JSON.stringify(requestPayload),
       })
 
+      console.log('=== REPLICATE API RESPONSE ===')
+      console.log('Response status:', response.status)
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()))
+
       const responseText = await response.text()
-      console.log('Replicate API response status:', response.status)
-      console.log('Replicate API response:', responseText)
+      console.log('Raw response text:', responseText)
 
       if (!response.ok) {
-        console.error('Replicate API error:', response.status, responseText)
-        throw new Error(`Replicate API error: ${response.status} - ${responseText}`)
+        console.error('=== REPLICATE API ERROR ===')
+        console.error('Status:', response.status)
+        console.error('Response:', responseText)
+        
+        // Try to parse error for more details
+        try {
+          const errorData = JSON.parse(responseText)
+          console.error('Parsed error data:', JSON.stringify(errorData, null, 2))
+        } catch (parseError) {
+          console.error('Could not parse error response as JSON')
+        }
+
+        await supabaseClient
+          .from('image_generations')
+          .update({ 
+            status: 'failed',
+            error_message: `Replicate API error: ${response.status} - ${responseText}`,
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', generationRecord.id)
+
+        return new Response(
+          JSON.stringify({ 
+            error: 'Replicate API error',
+            details: `Status: ${response.status}, Response: ${responseText}`,
+            generation_id: generationRecord.id
+          }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        )
       }
 
-      const result = JSON.parse(responseText)
-      console.log('Replicate parsed response:', result)
+      let result
+      try {
+        result = JSON.parse(responseText)
+        console.log('=== REPLICATE SUCCESS RESPONSE ===')
+        console.log('Parsed result:', JSON.stringify(result, null, 2))
+      } catch (parseError) {
+        console.error('Failed to parse success response:', parseError)
+        throw new Error(`Failed to parse Replicate response: ${responseText}`)
+      }
 
       const predictionId = result.id
       
+      if (!predictionId) {
+        console.error('No prediction ID in response:', result)
+        throw new Error('No prediction ID returned from Replicate')
+      }
+
+      console.log('Prediction started with ID:', predictionId)
+
       // Update with prediction ID
       await supabaseClient
         .from('image_generations')
@@ -279,7 +328,10 @@ serve(async (req) => {
       )
 
     } catch (error) {
-      console.error('Replicate generation error:', error)
+      console.error('=== GENERATION ERROR ===')
+      console.error('Error type:', error.constructor.name)
+      console.error('Error message:', error.message)
+      console.error('Error stack:', error.stack)
       
       // Update status to failed
       await supabaseClient
@@ -305,7 +357,11 @@ serve(async (req) => {
     }
 
   } catch (error) {
-    console.error('Error in replicate-generate function:', error)
+    console.error('=== MAIN FUNCTION ERROR ===')
+    console.error('Error type:', error.constructor.name)
+    console.error('Error message:', error.message)
+    console.error('Error stack:', error.stack)
+    
     return new Response(
       JSON.stringify({ error: 'Internal server error', details: error.message }),
       {
@@ -315,3 +371,4 @@ serve(async (req) => {
     )
   }
 })
+
