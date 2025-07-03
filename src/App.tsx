@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -22,50 +23,63 @@ const queryClient = new QueryClient();
 
 function App() {
   return (
-    <Router>
-      <div className="min-h-screen bg-white">
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/auth" element={<Auth />} />
-          <Route path="/account" element={
-            <ProtectedRoute>
-              <Account />
-            </ProtectedRoute>
-          } />
-          <Route path="/chat" element={
-            <ProtectedRoute>
-              <Chat />
-            </ProtectedRoute>
-          } />
-          <Route path="/chat/:sessionId" element={
-            <ProtectedRoute>
-              <FullScreenChat />
-            </ProtectedRoute>
-          } />
-          <Route path="/image-generation" element={
-            <ProtectedRoute>
-              <ImageGeneration />
-            </ProtectedRoute>
-          } />
-          <Route path="/video-generation" element={
-            <ProtectedRoute>
-              <VideoGeneration />
-            </ProtectedRoute>
-          } />
-          <Route path="/enhance" element={
-            <ProtectedRoute>
-              <Enhance />
-            </ProtectedRoute>
-          } />
-          <Route path="/payment" element={
-            <ProtectedRoute>
-              <Payment />
-            </ProtectedRoute>
-          } />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </div>
-    </Router>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <AuthProvider>
+          <Router>
+            <div className="min-h-screen bg-white">
+              <Toaster />
+              <Sonner />
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/account" element={
+                  <ProtectedRoute>
+                    <Account />
+                  </ProtectedRoute>
+                } />
+                <Route path="/chat" element={
+                  <ProtectedRoute>
+                    <Chat />
+                  </ProtectedRoute>
+                } />
+                <Route path="/chat/:sessionId" element={
+                  <ProtectedRoute>
+                    <FullScreenChat />
+                  </ProtectedRoute>
+                } />
+                <Route path="/image" element={
+                  <ProtectedRoute>
+                    <ImageGeneration />
+                  </ProtectedRoute>
+                } />
+                <Route path="/image-generation" element={
+                  <ProtectedRoute>
+                    <ImageGeneration />
+                  </ProtectedRoute>
+                } />
+                <Route path="/video-generation" element={
+                  <ProtectedRoute>
+                    <VideoGeneration />
+                  </ProtectedRoute>
+                } />
+                <Route path="/enhance" element={
+                  <ProtectedRoute>
+                    <Enhance />
+                  </ProtectedRoute>
+                } />
+                <Route path="/payment" element={
+                  <ProtectedRoute>
+                    <Payment />
+                  </ProtectedRoute>
+                } />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </div>
+          </Router>
+        </AuthProvider>
+      </TooltipProvider>
+    </QueryClientProvider>
   );
 }
 
