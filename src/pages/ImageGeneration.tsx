@@ -4,11 +4,9 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { 
-  Plus,
   Trash2,
   Download,
   Upload,
-  Settings,
   ChevronUp,
   MoreHorizontal
 } from 'lucide-react';
@@ -16,6 +14,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useKavenegarAuth } from '@/hooks/useKavenegarAuth';
 import { toast } from 'sonner';
+import ProjectSidebar from '@/components/ProjectSidebar';
 
 interface GeneratedImage {
   id: string;
@@ -44,6 +43,7 @@ const ImageGeneration = () => {
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [showExamples, setShowExamples] = useState(false);
   const [currentGenerationId, setCurrentGenerationId] = useState<string | null>(null);
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   
   const { user, session } = useAuth();
   const { user: phoneUser, isAuthenticated: isPhoneAuth } = useKavenegarAuth();
@@ -57,38 +57,60 @@ const ImageGeneration = () => {
     height: 1024
   });
 
-  // Load only image generation history (not chat messages)
+  // Load images for the current project
   useEffect(() => {
-    const loadGenerationHistory = async () => {
-      if (!currentUser) return;
+    const loadProjectImages = async () => {
+      if (!currentUser || !currentProjectId) return;
 
       try {
         const { data, error } = await supabase
-          .from('image_generations')
+          .from('image_library')
           .select('*')
           .eq('user_id', currentUser.id)
-          .order('created_at', { ascending: false })
-          .limit(50);
+          .eq('session_id', currentProjectId)
+          .order('created_at', { ascending: false });
 
         if (error) {
-          console.error('Failed to load generation history:', error);
+          console.error('Failed to load project images:', error);
           return;
         }
 
         if (data) {
           const imagesWithAspectRatio = data.map(img => ({
-            ...img,
-            aspect_ratio: `${img.width}:${img.height}` || '1:1'
+            id: img.id,
+            prompt: img.prompt || '',
+            image_url: img.image_url || '',
+            status: 'completed',
+            created_at: img.created_at || '',
+            model_type: img.model_used || 'flux_schnell',
+            width: 1024,
+            height: 1024,
+            aspect_ratio: img.aspect_ratio || '1:1'
           }));
           setGeneratedImages(imagesWithAspectRatio);
         }
       } catch (error) {
-        console.error('Error loading generation history:', error);
+        console.error('Error loading project images:', error);
       }
     };
 
-    loadGenerationHistory();
-  }, [currentUser]);
+    loadProjectImages();
+  }, [currentUser, currentProjectId]);
+
+  // Create new project session
+  const handleNewProject = () => {
+    const newProjectId = crypto.randomUUID();
+    setCurrentProjectId(newProjectId);
+    setGeneratedImages([]);
+    setSelectedImageIndex(null);
+    setPrompt('');
+  };
+
+  // Select existing project
+  const handleProjectSelect = (projectId: string) => {
+    setCurrentProjectId(projectId);
+    setSelectedImageIndex(null);
+  };
 
   // Handle aspect ratio change
   const handleAspectRatioChange = (aspectRatio: string) => {
@@ -225,22 +247,113 @@ const ImageGeneration = () => {
     poll();
   };
 
-  // Save to image library
-  const saveToImageLibrary = async (prompt: string, imageUrl: string, modelUsed: string, aspectRatio: string) => {
-    if (!currentUser) return;
+  // Updated saveToImageLibrary to use current project
+  const saveToImageLibrary = async (
+    prompt: string, 
+    imageUrl: string, 
+    modelUsed: string,
+    aspectRatio: string
+  ) => {
+    if (!currentUser) {
+      console.log('⚠️ No user found, skipping image library save');
+      return;
+    }
+
+    // Create a new project if none exists
+    const sessionId = currentProjectId || crypto.randomUUID();
+    if (!currentProjectId) {
+      setCurrentProjectId(sessionId);
+    }
 
     try {
-      await supabase
+      console.log('💾 Saving image to library...');
+      
+      const { data, error } = await supabase
         .from('image_library')
         .insert({
           user_id: currentUser.id,
+          session_id: sessionId,
           prompt: prompt,
           image_url: imageUrl,
           model_used: modelUsed,
           aspect_ratio: aspectRatio
-        });
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Image library save error:', error);
+        throw error;
+      }
+
+      console.log('✅ Image saved to library:', data.id);
+      return data;
     } catch (error) {
-      console.error('Error saving to image library:', error);
+      console.error('❌ Error saving image to library:', error);
+      throw error;
+    }
+  };
+
+  // Save to image library
+  const saveImageGeneration = async (
+    prompt: string, 
+    imageUrl: string, 
+    metadata?: { 
+      generation_count?: number; 
+      all_urls?: string[];
+      settings?: {
+        size: string;
+        quality: string;
+        style: string;
+        model: string;
+      };
+    }
+  ) => {
+    if (!user) {
+      console.log('⚠️ No user found, skipping database save');
+      return;
+    }
+
+    try {
+      console.log('💾 Saving ChatGPT-quality image generation to database...');
+      
+      const promptNote = metadata?.generation_count 
+        ? `ChatGPT-quality generation (${metadata.generation_count} images generated at ${metadata.settings?.size || '1024x1024'})`
+        : 'Single ChatGPT-quality generation';
+      
+      const { data, error } = await supabase
+        .from('image_generations')
+        .insert({
+          user_id: user.id,
+          prompt: prompt,
+          image_url: imageUrl,
+          model_type: 'dall-e-3-chatgpt-quality',
+          status: 'completed',
+          width: 1024,
+          height: 1024,
+          steps: 50,
+          cfg_scale: 7.0,
+          error_message: metadata ? JSON.stringify({
+            type: 'chatgpt_quality_metadata',
+            generation_count: metadata.generation_count,
+            all_urls_count: metadata.all_urls?.length,
+            settings: metadata.settings,
+            note: promptNote
+          }) : null
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Database save error:', error);
+        throw error;
+      }
+
+      console.log('✅ ChatGPT-quality image generation saved:', data.id);
+      return data;
+    } catch (error) {
+      console.error('❌ Error saving ChatGPT-quality image generation:', error);
+      throw error;
     }
   };
 
@@ -277,47 +390,15 @@ const ImageGeneration = () => {
 
   return (
     <div className="h-[calc(100vh-4rem)] bg-[#121212] text-white flex overflow-hidden">
-      {/* Left Sidebar */}
-      <div className="w-16 bg-[#1A1A1A] border-r border-gray-800 flex flex-col py-4">
-        {/* New Generation Button */}
-        <div className="px-2 mb-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="w-12 h-12 bg-gray-800 hover:bg-gray-700 text-white rounded-lg"
-            onClick={() => {
-              setPrompt('');
-              setSelectedImageIndex(null);
-            }}
-          >
-            <Plus className="w-5 h-5" />
-          </Button>
-        </div>
+      {/* Project Sidebar */}
+      <ProjectSidebar
+        currentProjectId={currentProjectId}
+        onProjectSelect={handleProjectSelect}
+        onNewProject={handleNewProject}
+      />
 
-        {/* History Thumbnails */}
-        <div className="flex-1 overflow-y-auto px-2 space-y-2">
-          {generatedImages.map((image, index) => (
-            <div
-              key={image.id}
-              className={`relative w-12 h-12 rounded-lg overflow-hidden cursor-pointer border transition-all ${
-                selectedImageIndex === index 
-                  ? 'border-blue-500 ring-1 ring-blue-500/50' 
-                  : 'border-gray-700 hover:border-gray-600'
-              }`}
-              onClick={() => setSelectedImageIndex(index)}
-            >
-              <img
-                src={image.image_url}
-                alt={image.prompt}
-                className="w-full h-full object-cover"
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col">
+      {/* Main Content - adjusted for sidebar */}
+      <div className="flex-1 flex flex-col ml-16">
         {/* Generated Images Display */}
         <div className="flex-1 overflow-y-auto p-6">
           <div className="max-w-4xl mx-auto space-y-6">
@@ -407,6 +488,13 @@ const ImageGeneration = () => {
                 </div>
               </div>
             ))}
+
+            {generatedImages.length === 0 && (
+              <div className="text-center text-gray-400 py-12">
+                <div className="text-lg mb-2">No images in this project yet</div>
+                <div className="text-sm">Start generating images to see them here</div>
+              </div>
+            )}
           </div>
         </div>
 

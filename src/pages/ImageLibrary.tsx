@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,10 +19,10 @@ interface GeneratedImage {
   id: string;
   prompt: string;
   image_url: string;
-  status: string;
   created_at: string;
   model_used: string;
   aspect_ratio: string;
+  session_id?: string;
 }
 
 const ImageLibrary = () => {
