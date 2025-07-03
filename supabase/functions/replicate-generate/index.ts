@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -120,7 +119,7 @@ serve(async (req) => {
     console.log('Starting image generation for user:', user.id)
     console.log('Model:', model)
     console.log('Prompt:', prompt)
-    console.log('Dimensions:', width, 'x', height)
+    console.log('Requested dimensions:', width, 'x', height)
 
     // Create database record
     const { data: generationRecord, error: insertError } = await supabaseClient
@@ -186,7 +185,7 @@ serve(async (req) => {
         .update({ status: 'processing' })
         .eq('id', generationRecord.id)
 
-      // Use simple dimensions for testing
+      // Prepare input payload - ONLY use aspect_ratio, NO width/height
       let modelVersion = ""
       let input: any = {
         prompt: prompt,
@@ -206,17 +205,20 @@ serve(async (req) => {
         input.num_inference_steps = 4
       }
 
-      // Set dimensions - use simple approach first
+      // Set ONLY aspect_ratio - remove width/height entirely
       if (width === 1024 && height === 1024) {
         input.aspect_ratio = "1:1"
       } else if (width === 1280 && height === 720) {
         input.aspect_ratio = "16:9"
       } else if (width === 720 && height === 1280) {
         input.aspect_ratio = "9:16"
+      } else if (width === 1024 && height === 768) {
+        input.aspect_ratio = "4:3"
+      } else if (width === 768 && height === 1024) {
+        input.aspect_ratio = "3:4"
       } else {
-        // For testing, let's use specific dimensions
-        input.width = width
-        input.height = height
+        // Default to 1:1 if dimensions don't match standard ratios
+        input.aspect_ratio = "1:1"
       }
 
       // Add negative prompt if provided
@@ -226,7 +228,7 @@ serve(async (req) => {
 
       console.log('=== REPLICATE API CALL DETAILS ===')
       console.log('Model version:', modelVersion)
-      console.log('Input payload:', JSON.stringify(input, null, 2))
+      console.log('Input payload (NO width/height):', JSON.stringify(input, null, 2))
 
       const requestPayload = {
         version: modelVersion,
