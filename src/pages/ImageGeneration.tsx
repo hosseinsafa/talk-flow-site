@@ -5,7 +5,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { 
-  Trash2,
   Download,
   Upload,
   ChevronUp,
@@ -518,9 +517,6 @@ const ImageGeneration = () => {
                   <div className="mb-4">
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="text-sm font-medium text-gray-300">Prompt</h3>
-                      <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white">
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
                     </div>
                     <p className="text-sm text-[#E5E5E5] leading-relaxed mb-3">
                       {image.prompt}
@@ -564,14 +560,6 @@ const ImageGeneration = () => {
                           variant="ghost"
                           size="sm"
                           className="text-gray-400 hover:text-white"
-                          onClick={() => handleDeleteImage(image.id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-gray-400 hover:text-white"
                         >
                           <MoreHorizontal className="w-4 h-4" />
                         </Button>
@@ -591,8 +579,8 @@ const ImageGeneration = () => {
           </div>
         </div>
 
-        {/* Bottom Input Area */}
-        <div className="border-t border-gray-800 bg-[#1A1A1A] p-6">
+        {/* Bottom Input Area - unified background color */}
+        <div className="border-t border-gray-800 bg-[#121212] p-6">
           <div className="max-w-4xl mx-auto">
             {/* Input Field */}
             <div className="relative mb-6">
@@ -630,8 +618,8 @@ const ImageGeneration = () => {
               </div>
             )}
 
-            {/* Controls */}
-            <div className="flex items-center justify-between text-sm">
+            {/* Controls - removed "Show examples" button */}
+            <div className="flex items-center justify-start text-sm">
               <div className="flex items-center gap-4">
                 <Select value={settings.model} onValueChange={(value) => setSettings(prev => ({ ...prev, model: value }))}>
                   <SelectTrigger className="w-32 bg-[#2A2A2A] border-gray-700 text-white h-8">
