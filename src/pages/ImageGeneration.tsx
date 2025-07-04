@@ -9,7 +9,8 @@ import {
   Download,
   Upload,
   ChevronUp,
-  MoreHorizontal
+  MoreHorizontal,
+  X
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -47,7 +48,8 @@ const ImageGeneration = () => {
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [lastGenerationTime, setLastGenerationTime] = useState<number>(0);
   const [cooldownRemaining, setCooldownRemaining] = useState<number>(0);
-  
+  const [selectedImageForModal, setSelectedImageForModal] = useState<GeneratedImage | null>(null);
+
   const { user, session } = useAuth();
   const { user: phoneUser, isAuthenticated: isPhoneAuth } = useKavenegarAuth();
   const currentUser = phoneUser || user;
@@ -451,13 +453,24 @@ const ImageGeneration = () => {
     }
   };
 
-  // Download image
-  const handleDownloadImage = (imageUrl: string, prompt: string) => {
-    const link = document.createElement('a');
-    link.href = imageUrl;
-    link.download = `generated-image-${Date.now()}.png`;
-    link.click();
-    toast.success('Image downloaded');
+  // Download image function - direct download without opening new window
+  const handleDownloadImage = async (imageUrl: string, prompt: string) => {
+    try {
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `generated-image-${Date.now()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      toast.success('Image downloaded');
+    } catch (error) {
+      console.error('Download failed:', error);
+      toast.error('Failed to download image');
+    }
   };
 
   // Check if generation is disabled
@@ -490,19 +503,13 @@ const ImageGeneration = () => {
           <div className="max-w-4xl mx-auto space-y-6">
             {generatedImages.map((image, index) => (
               <div key={image.id} className="bg-[#1A1A1A] rounded-lg overflow-hidden">
-                {/* Image */}
-                <div className="relative">
+                {/* Image - 50% size preview */}
+                <div className="relative cursor-pointer" onClick={() => setSelectedImageForModal(image)}>
                   <img
                     src={image.image_url}
                     alt={image.prompt}
-                    className="w-full h-auto"
+                    className="w-1/2 h-auto mx-auto hover:opacity-90 transition-opacity"
                   />
-                  
-                  {/* Overlay with branding */}
-                  <div className="absolute bottom-3 right-3 flex items-center gap-2 text-xs text-gray-400">
-                    <span className="bg-black/50 px-2 py-1 rounded">{image.model_type?.toUpperCase()}</span>
-                    <span className="bg-black/50 px-2 py-1 rounded">Replicate</span>
-                  </div>
                 </div>
 
                 {/* Content */}
@@ -546,7 +553,10 @@ const ImageGeneration = () => {
                           variant="ghost"
                           size="sm"
                           className="text-gray-400 hover:text-white"
-                          onClick={() => handleDownloadImage(image.image_url, image.prompt)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDownloadImage(image.image_url, image.prompt);
+                          }}
                         >
                           <Download className="w-4 h-4" />
                         </Button>
@@ -709,6 +719,31 @@ const ImageGeneration = () => {
           </div>
         </div>
       </div>
+
+      {/* Full-size Image Modal */}
+      {selectedImageForModal && (
+        <div 
+          className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4"
+          onClick={() => setSelectedImageForModal(null)}
+        >
+          <div className="relative max-w-[90vw] max-h-[90vh]">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="absolute -top-12 right-0 text-white hover:text-gray-300 z-10"
+              onClick={() => setSelectedImageForModal(null)}
+            >
+              <X className="w-6 h-6" />
+            </Button>
+            <img
+              src={selectedImageForModal.image_url}
+              alt={selectedImageForModal.prompt}
+              className="max-w-full max-h-full object-contain"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Examples Modal */}
       {showExamples && (
