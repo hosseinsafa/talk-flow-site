@@ -26,15 +26,8 @@ const models: ModelOption[] = [
   {
     id: 'flux_dev',
     name: 'Flux Dev',
-    description: 'High quality generation',
+    description: 'High quality generation (customizable steps)',
     badge: 'Quality'
-  },
-  {
-    id: 'comfyui_local',
-    name: 'ComfyUI Local',
-    description: 'Local GPU server',
-    disabled: true,
-    badge: 'Soon'
   }
 ];
 

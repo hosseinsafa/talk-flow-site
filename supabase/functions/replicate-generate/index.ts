@@ -9,15 +9,13 @@ const corsHeaders = {
 
 interface GenerationRequest {
   prompt: string
-  negative_prompt?: string
-  steps?: number
-  cfg_scale?: number
-  width?: number
-  height?: number
   model: string
+  aspect_ratio?: string
+  guidance_scale?: number
+  num_inference_steps?: number
 }
 
-// Model version IDs for Replicate API
+// Replicate model version IDs
 const MODEL_VERSIONS = {
   'flux_schnell': 'f2ab8a5569070ad749f0c6ded6fcb7f70aa4aa370c88c7b13b3b42b3e2c7c9fb',
   'flux_dev': '362f78965670d5c91c4084b3e52398969c87b3b01b3a2b0e6c7f9e6afd98b69b'
@@ -26,7 +24,7 @@ const MODEL_VERSIONS = {
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 serve(async (req) => {
-  console.log('=== REPLICATE GENERATE FUNCTION STARTED ===')
+  console.log('🚀 === REPLICATE GENERATE FUNCTION STARTED ===')
   console.log('Request method:', req.method)
   
   // Handle CORS preflight requests
@@ -38,13 +36,24 @@ serve(async (req) => {
   try {
     // Parse request body
     const requestBody: GenerationRequest = await req.json()
-    console.log('Request received:', JSON.stringify(requestBody, null, 2))
+    console.log('📝 Request received:', JSON.stringify(requestBody, null, 2))
 
     // Validate required fields
     if (!requestBody.prompt) {
-      console.error('Missing prompt in request')
+      console.error('❌ Missing prompt in request')
       return new Response(
         JSON.stringify({ error: 'Prompt is required' }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
+    }
+
+    if (!requestBody.model || !MODEL_VERSIONS[requestBody.model as keyof typeof MODEL_VERSIONS]) {
+      console.error('❌ Invalid model specified:', requestBody.model)
+      return new Response(
+        JSON.stringify({ error: 'Valid model is required (flux_schnell or flux_dev)' }),
         {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -55,7 +64,7 @@ serve(async (req) => {
     // Get and validate authorization header
     const authHeader = req.headers.get('Authorization')
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.error('Invalid or missing Authorization header')
+      console.error('❌ Invalid or missing Authorization header')
       return new Response(
         JSON.stringify({ 
           error: 'Authentication required',
@@ -68,16 +77,13 @@ serve(async (req) => {
       )
     }
 
-    // Extract JWT token
+    // Extract JWT token and create Supabase client
     const jwtToken = authHeader.replace('Bearer ', '')
-    console.log('JWT token extracted')
-
-    // Create Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
     const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')
     
     if (!supabaseUrl || !supabaseKey) {
-      console.error('Missing Supabase configuration')
+      console.error('❌ Missing Supabase configuration')
       return new Response(
         JSON.stringify({ error: 'Server configuration error' }),
         {
@@ -100,11 +106,11 @@ serve(async (req) => {
     })
 
     // Verify JWT token and get user
-    console.log('Verifying user authentication')
+    console.log('🔐 Verifying user authentication')
     const { data: userData, error: authError } = await supabaseClient.auth.getUser(jwtToken)
     
     if (authError || !userData.user) {
-      console.error('Authentication failed:', authError)
+      console.error('❌ Authentication failed:', authError)
       return new Response(
         JSON.stringify({ 
           error: 'Authentication failed',
@@ -118,47 +124,38 @@ serve(async (req) => {
     }
 
     const user = userData.user
-    console.log('User authenticated successfully:', user.id)
+    console.log('✅ User authenticated successfully:', user.id)
 
-    // Extract request parameters
+    // Extract parameters
     const {
       prompt,
-      negative_prompt = '',
-      steps = 4,
-      cfg_scale = 1.0,
-      width = 1024,
-      height = 1024,
-      model
+      model,
+      aspect_ratio = '1:1',
+      guidance_scale,
+      num_inference_steps
     } = requestBody
 
-    console.log('Generation parameters:', {
-      prompt,
-      model,
-      dimensions: `${width}x${height}`,
-      steps,
-      cfg_scale
-    })
+    console.log('🎨 Generation parameters:', { prompt, model, aspect_ratio, guidance_scale, num_inference_steps })
 
     // Create database record
-    console.log('Creating database record')
+    console.log('💾 Creating database record')
     const { data: generationRecord, error: insertError } = await supabaseClient
       .from('image_generations')
       .insert({
         user_id: user.id,
         prompt,
-        negative_prompt,
-        steps,
-        cfg_scale,
-        width,
-        height,
         model_type: model,
-        status: 'pending'
+        status: 'pending',
+        width: aspect_ratio === '16:9' ? 1280 : aspect_ratio === '9:16' ? 720 : 1024,
+        height: aspect_ratio === '16:9' ? 720 : aspect_ratio === '9:16' ? 1280 : 1024,
+        steps: model === 'flux_schnell' ? 4 : (num_inference_steps || 50),
+        cfg_scale: model === 'flux_schnell' ? 1.0 : (guidance_scale || 3.5)
       })
       .select()
       .single()
 
     if (insertError) {
-      console.error('Database insert error:', insertError)
+      console.error('❌ Database insert error:', insertError)
       return new Response(
         JSON.stringify({ error: 'Failed to create generation record', details: insertError.message }),
         {
@@ -168,12 +165,12 @@ serve(async (req) => {
       )
     }
 
-    console.log('Created generation record:', generationRecord.id)
+    console.log('✅ Created generation record:', generationRecord.id)
 
     // Get Replicate API key
     const REPLICATE_API_KEY = Deno.env.get('REPLICATE_API_KEY')
     if (!REPLICATE_API_KEY) {
-      console.error('REPLICATE_API_KEY not found')
+      console.error('❌ REPLICATE_API_KEY not found')
       await supabaseClient
         .from('image_generations')
         .update({ 
@@ -202,53 +199,34 @@ serve(async (req) => {
         .update({ status: 'processing' })
         .eq('id', generationRecord.id)
 
-      // Get correct model version
-      const modelVersion = MODEL_VERSIONS[model as keyof typeof MODEL_VERSIONS] || MODEL_VERSIONS.flux_schnell
-      console.log('Using model version:', modelVersion)
+      // Get model version ID
+      const versionId = MODEL_VERSIONS[model as keyof typeof MODEL_VERSIONS]
+      console.log('🤖 Using model version:', versionId)
 
       // Prepare input for Replicate API
       const input: any = {
         prompt: prompt,
-        num_outputs: 1,
+        aspect_ratio: aspect_ratio,
         output_format: "webp",
         output_quality: 90
       }
 
-      // Set aspect ratio based on dimensions
-      if (width === 1024 && height === 1024) {
-        input.aspect_ratio = "1:1"
-      } else if (width === 1280 && height === 720) {
-        input.aspect_ratio = "16:9"
-      } else if (width === 720 && height === 1280) {
-        input.aspect_ratio = "9:16"
-      } else if (width === 1024 && height === 768) {
-        input.aspect_ratio = "4:3"
-      } else if (width === 768 && height === 1024) {
-        input.aspect_ratio = "3:4"
-      } else {
-        input.aspect_ratio = "1:1"
-      }
-
       // Add model-specific parameters
       if (model === 'flux_dev') {
-        input.guidance_scale = cfg_scale
-        input.num_inference_steps = steps
+        input.guidance_scale = guidance_scale || 3.5
+        input.num_inference_steps = num_inference_steps || 50
       } else {
+        // Flux Schnell always uses 4 steps
         input.num_inference_steps = 4
-      }
-
-      // Add negative prompt if provided
-      if (negative_prompt && negative_prompt.trim()) {
-        input.negative_prompt = negative_prompt
       }
 
       // Prepare Replicate API payload - ONLY version and input
       const replicatePayload = {
-        version: modelVersion,
+        version: versionId,
         input: input
       }
 
-      console.log('Replicate API payload:', JSON.stringify(replicatePayload, null, 2))
+      console.log('📤 Replicate API payload:', JSON.stringify(replicatePayload, null, 2))
 
       // Call Replicate API with retry logic
       let retryCount = 0
@@ -257,7 +235,7 @@ serve(async (req) => {
 
       while (retryCount <= maxRetries) {
         try {
-          console.log(`Calling Replicate API (attempt ${retryCount + 1})`)
+          console.log(`📡 Calling Replicate API (attempt ${retryCount + 1})`)
           response = await fetch('https://api.replicate.com/v1/predictions', {
             method: 'POST',
             headers: {
@@ -267,7 +245,7 @@ serve(async (req) => {
             body: JSON.stringify(replicatePayload),
           })
 
-          console.log('Replicate API response status:', response.status)
+          console.log('📊 Replicate API response status:', response.status)
 
           // Handle rate limiting
           if (response.status === 429) {
@@ -275,12 +253,12 @@ serve(async (req) => {
             const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : Math.pow(2, retryCount) * 1000
 
             if (retryCount < maxRetries) {
-              console.log(`Rate limited. Retrying in ${waitTime}ms (attempt ${retryCount + 1}/${maxRetries})`)
+              console.log(`⏳ Rate limited. Retrying in ${waitTime}ms (attempt ${retryCount + 1}/${maxRetries})`)
               await sleep(waitTime)
               retryCount++
               continue
             } else {
-              console.error('Max retries exceeded for rate limiting')
+              console.error('❌ Max retries exceeded for rate limiting')
               const errorMessage = 'Request was throttled. Please try again in a few seconds.'
               
               await supabaseClient
@@ -314,9 +292,9 @@ serve(async (req) => {
           break
 
         } catch (fetchError) {
-          console.error('Network error during API call:', fetchError)
+          console.error('❌ Network error during API call:', fetchError)
           if (retryCount < maxRetries) {
-            console.log(`Network error. Retrying in ${1000 * (retryCount + 1)}ms...`)
+            console.log(`🔄 Network error. Retrying in ${1000 * (retryCount + 1)}ms...`)
             await sleep(1000 * (retryCount + 1))
             retryCount++
             continue
@@ -327,10 +305,10 @@ serve(async (req) => {
       }
 
       const responseText = await response.text()
-      console.log('Replicate API raw response:', responseText)
+      console.log('📥 Replicate API raw response:', responseText)
 
       if (!response.ok) {
-        console.error('Replicate API error:', response.status, responseText)
+        console.error('❌ Replicate API error:', response.status, responseText)
         
         await supabaseClient
           .from('image_generations')
@@ -357,20 +335,20 @@ serve(async (req) => {
       let result
       try {
         result = JSON.parse(responseText)
-        console.log('Parsed Replicate response:', JSON.stringify(result, null, 2))
+        console.log('✅ Parsed Replicate response:', JSON.stringify(result, null, 2))
       } catch (parseError) {
-        console.error('Failed to parse Replicate response:', parseError)
+        console.error('❌ Failed to parse Replicate response:', parseError)
         throw new Error(`Failed to parse Replicate response: ${responseText}`)
       }
 
       const predictionId = result.id
       
       if (!predictionId) {
-        console.error('No prediction ID in response:', result)
+        console.error('❌ No prediction ID in response:', result)
         throw new Error('No prediction ID returned from Replicate')
       }
 
-      console.log('Prediction started successfully with ID:', predictionId)
+      console.log('🎉 Prediction started successfully with ID:', predictionId)
 
       // Update database with prediction ID
       await supabaseClient
@@ -381,7 +359,7 @@ serve(async (req) => {
         })
         .eq('id', generationRecord.id)
 
-      console.log('=== FUNCTION COMPLETED SUCCESSFULLY ===')
+      console.log('✅ === FUNCTION COMPLETED SUCCESSFULLY ===')
       return new Response(
         JSON.stringify({ 
           success: true,
@@ -396,7 +374,7 @@ serve(async (req) => {
       )
 
     } catch (error) {
-      console.error('Generation error:', error)
+      console.error('❌ Generation error:', error)
       
       // Update status to failed
       await supabaseClient
@@ -422,7 +400,7 @@ serve(async (req) => {
     }
 
   } catch (error) {
-    console.error('Main function error:', error)
+    console.error('❌ Main function error:', error)
     
     return new Response(
       JSON.stringify({ error: 'Internal server error', details: error.message }),

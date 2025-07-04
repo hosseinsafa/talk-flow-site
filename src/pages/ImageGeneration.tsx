@@ -60,6 +60,12 @@ const ImageGeneration = () => {
     height: 1024
   });
 
+  // Advanced settings for Flux Dev
+  const [advancedSettings, setAdvancedSettings] = useState({
+    guidance_scale: 3.5,
+    num_inference_steps: 50
+  });
+
   // Cooldown timer effect
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -139,23 +145,10 @@ const ImageGeneration = () => {
 
   // Handle aspect ratio change
   const handleAspectRatioChange = (aspectRatio: string) => {
-    const aspectRatioOptions = [
-      { value: '1:1', label: '1:1', width: 1024, height: 1024 },
-      { value: '16:9', label: '16:9', width: 1280, height: 720 },
-      { value: '9:16', label: '9:16', width: 720, height: 1280 },
-      { value: '4:3', label: '4:3', width: 1024, height: 768 },
-      { value: '3:4', label: '3:4', width: 768, height: 1024 }
-    ];
-    
-    const option = aspectRatioOptions.find(opt => opt.value === aspectRatio);
-    if (option) {
-      setSettings(prev => ({
-        ...prev,
-        aspect_ratio: aspectRatio,
-        width: option.width,
-        height: option.height
-      }));
-    }
+    setSettings(prev => ({
+      ...prev,
+      aspect_ratio: aspectRatio
+    }));
   };
 
   // Generate image using the replicate-generate function
@@ -188,15 +181,23 @@ const ImageGeneration = () => {
     try {
       const enhancedPrompt = `${prompt}, ${settings.style} style`;
       
+      // Prepare payload for new API structure
+      const payload: any = {
+        prompt: enhancedPrompt,
+        model: settings.model,
+        aspect_ratio: settings.aspect_ratio,
+      };
+
+      // Add advanced settings for Flux Dev
+      if (settings.model === 'flux_dev') {
+        payload.guidance_scale = advancedSettings.guidance_scale;
+        payload.num_inference_steps = advancedSettings.num_inference_steps;
+      }
+
+      console.log('🚀 Sending generation request:', payload);
+      
       const { data, error } = await supabase.functions.invoke('replicate-generate', {
-        body: {
-          prompt: enhancedPrompt,
-          model: settings.model,
-          width: settings.width,
-          height: settings.height,
-          steps: settings.model === 'flux_schnell' ? 4 : 50,
-          cfg_scale: settings.model === 'flux_schnell' ? 1.0 : 3.5,
-        },
+        body: payload,
         headers: {
           Authorization: `Bearer ${session?.access_token}`,
         }
@@ -499,8 +500,8 @@ const ImageGeneration = () => {
                   
                   {/* Overlay with branding */}
                   <div className="absolute bottom-3 right-3 flex items-center gap-2 text-xs text-gray-400">
-                    <span className="bg-black/50 px-2 py-1 rounded">MINIMAX</span>
-                    <span className="bg-black/50 px-2 py-1 rounded">Hailuo AI</span>
+                    <span className="bg-black/50 px-2 py-1 rounded">{image.model_type?.toUpperCase()}</span>
+                    <span className="bg-black/50 px-2 py-1 rounded">Replicate</span>
                   </div>
                 </div>
 
@@ -521,10 +522,7 @@ const ImageGeneration = () => {
                     {/* Tags */}
                     <div className="flex items-center gap-2 mb-4">
                       <Badge variant="outline" className="text-xs bg-gray-800 border-gray-700 text-gray-300">
-                        {image.model_type || 'Image-01'}
-                      </Badge>
-                      <Badge variant="outline" className="text-xs bg-gray-800 border-gray-700 text-gray-300">
-                        Enable Optimization
+                        {image.model_type || 'flux_schnell'}
                       </Badge>
                       <Badge variant="outline" className="text-xs bg-gray-800 border-gray-700 text-gray-300">
                         {image.aspect_ratio}
@@ -587,12 +585,12 @@ const ImageGeneration = () => {
         <div className="border-t border-gray-800 bg-[#1A1A1A] p-6">
           <div className="max-w-4xl mx-auto">
             {/* Input Field */}
-            <div className="relative mb-4">
+            <div className="relative mb-6">
               <Textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="Describe an image and click generate..."
-                className="w-full bg-[#2A2A2A] border-gray-700 text-white placeholder-gray-500 pr-32 min-h-[120px] max-h-[300px] text-sm rounded-lg resize-none"
+                className="w-full bg-[#2A2A2A] border-gray-700 text-white placeholder-gray-500 pr-32 min-h-[150px] max-h-[300px] text-sm rounded-lg resize-none pb-16"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && e.ctrlKey && !isGenerationDisabled()) {
                     handleGenerate();
@@ -603,7 +601,7 @@ const ImageGeneration = () => {
               <Button
                 onClick={handleGenerate}
                 disabled={isGenerationDisabled()}
-                className={`absolute right-3 top-3 px-4 h-8 text-sm font-medium rounded-md ${
+                className={`absolute right-3 bottom-3 px-6 h-10 text-sm font-medium rounded-md ${
                   isGenerationDisabled() 
                     ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
                     : 'bg-white text-black hover:bg-gray-200'
@@ -627,7 +625,7 @@ const ImageGeneration = () => {
               <div className="flex items-center gap-4">
                 <Select value={settings.model} onValueChange={(value) => setSettings(prev => ({ ...prev, model: value }))}>
                   <SelectTrigger className="w-32 bg-[#2A2A2A] border-gray-700 text-white h-8">
-                    <SelectValue placeholder="Image Model" />
+                    <SelectValue placeholder="Model" />
                   </SelectTrigger>
                   <SelectContent className="bg-[#2A2A2A] border-gray-700">
                     <SelectItem value="flux_schnell" className="text-white">Flux Schnell</SelectItem>
@@ -637,7 +635,7 @@ const ImageGeneration = () => {
 
                 <Select value={settings.style} onValueChange={(value) => setSettings(prev => ({ ...prev, style: value }))}>
                   <SelectTrigger className="w-32 bg-[#2A2A2A] border-gray-700 text-white h-8">
-                    <SelectValue placeholder="Image style" />
+                    <SelectValue placeholder="Style" />
                   </SelectTrigger>
                   <SelectContent className="bg-[#2A2A2A] border-gray-700">
                     <SelectItem value="realistic" className="text-white">Realistic</SelectItem>
@@ -646,23 +644,23 @@ const ImageGeneration = () => {
                   </SelectContent>
                 </Select>
 
-                <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white h-8 px-3">
-                  <Upload className="w-4 h-4 mr-2" />
-                  Image prompt
-                </Button>
-
                 <Select value={settings.aspect_ratio} onValueChange={handleAspectRatioChange}>
                   <SelectTrigger className="w-24 bg-[#2A2A2A] border-gray-700 text-white h-8">
-                    <SelectValue placeholder="aspect ratio" />
+                    <SelectValue placeholder="Ratio" />
                   </SelectTrigger>
                   <SelectContent className="bg-[#2A2A2A] border-gray-700">
                     <SelectItem value="1:1" className="text-white">1:1</SelectItem>
                     <SelectItem value="16:9" className="text-white">16:9</SelectItem>
                     <SelectItem value="9:16" className="text-white">9:16</SelectItem>
+                    <SelectItem value="4:3" className="text-white">4:3</SelectItem>
+                    <SelectItem value="3:4" className="text-white">3:4</SelectItem>
                   </SelectContent>
                 </Select>
 
-                <span className="text-gray-400 text-xs">image size</span>
+                <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white h-8 px-3">
+                  <Upload className="w-4 h-4 mr-2" />
+                  Image prompt
+                </Button>
               </div>
 
               <Button
@@ -675,6 +673,39 @@ const ImageGeneration = () => {
                 Show examples
               </Button>
             </div>
+
+            {/* Advanced Settings for Flux Dev */}
+            {settings.model === 'flux_dev' && (
+              <div className="mt-4 p-4 bg-[#2A2A2A] rounded-lg border border-gray-700">
+                <h4 className="text-sm font-medium text-gray-300 mb-3">Advanced Settings</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block">Guidance Scale: {advancedSettings.guidance_scale}</label>
+                    <input
+                      type="range"
+                      min="1"
+                      max="10"
+                      step="0.5"
+                      value={advancedSettings.guidance_scale}
+                      onChange={(e) => setAdvancedSettings(prev => ({ ...prev, guidance_scale: parseFloat(e.target.value) }))}
+                      className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block">Steps: {advancedSettings.num_inference_steps}</label>
+                    <input
+                      type="range"
+                      min="10"
+                      max="100"
+                      step="5"
+                      value={advancedSettings.num_inference_steps}
+                      onChange={(e) => setAdvancedSettings(prev => ({ ...prev, num_inference_steps: parseInt(e.target.value) }))}
+                      className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -696,16 +727,28 @@ const ImageGeneration = () => {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="bg-[#2A2A2A] rounded-lg p-4 cursor-pointer hover:bg-[#333] transition-colors" onClick={() => {
-                setPrompt("A majestic golden lion with sleek fur prowls confidently through a rain-soaked metropolis at night, neon signs reflecting on wet asphalt as towering skyscrapers loom in the background, illuminated by dramatic cinematic lighting that highlights the predator's intense gaze and muscular frame against the urban jungle.");
+                setPrompt("cat in neon cyberpunk alley");
+                setSettings(prev => ({ ...prev, aspect_ratio: '1:1' }));
                 setShowExamples(false);
               }}>
-                <img
-                  src="/lovable-uploads/4b5b9e5c-903d-4279-b67b-506baae7c8f2.png"
-                  alt="Example"
-                  className="w-full h-32 object-cover rounded mb-3"
-                />
+                <div className="w-full h-32 bg-gray-700 rounded mb-3 flex items-center justify-center">
+                  <span className="text-gray-400 text-sm">Flux Schnell Example</span>
+                </div>
                 <p className="text-sm text-gray-300 leading-relaxed">
-                  A majestic golden lion with sleek fur prowls confidently through a rain-soaked metropolis at night...
+                  cat in neon cyberpunk alley, 1:1
+                </p>
+              </div>
+              
+              <div className="bg-[#2A2A2A] rounded-lg p-4 cursor-pointer hover:bg-[#333] transition-colors" onClick={() => {
+                setPrompt("futuristic skyline, dramatic lighting");
+                setSettings(prev => ({ ...prev, aspect_ratio: '16:9', model: 'flux_dev' }));
+                setShowExamples(false);
+              }}>
+                <div className="w-full h-32 bg-gray-700 rounded mb-3 flex items-center justify-center">
+                  <span className="text-gray-400 text-sm">Flux Dev Example</span>
+                </div>
+                <p className="text-sm text-gray-300 leading-relaxed">
+                  futuristic skyline, dramatic lighting, 16:9
                 </p>
               </div>
             </div>
