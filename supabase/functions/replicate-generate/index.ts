@@ -9,16 +9,8 @@ const corsHeaders = {
 
 interface GenerationRequest {
   prompt: string
-  model: string
   aspect_ratio?: string
-  guidance_scale?: number
-  num_inference_steps?: number
-}
-
-// Replicate model version IDs
-const MODEL_VERSIONS = {
-  'flux_schnell': 'f2ab8a5569070ad749f0c6ded6fcb7f70aa4aa370c88c7b13b3b42b3e2c7c9fb',
-  'flux_dev': '362f78965670d5c91c4084b3e52398969c87b3b01b3a2b0e6c7f9e6afd98b69b'
+  prompt_strength?: number
 }
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -43,17 +35,6 @@ serve(async (req) => {
       console.error('❌ Missing prompt in request')
       return new Response(
         JSON.stringify({ error: 'Prompt is required' }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      )
-    }
-
-    if (!requestBody.model || !MODEL_VERSIONS[requestBody.model as keyof typeof MODEL_VERSIONS]) {
-      console.error('❌ Invalid model specified:', requestBody.model)
-      return new Response(
-        JSON.stringify({ error: 'Valid model is required (flux_schnell or flux_dev)' }),
         {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -126,16 +107,14 @@ serve(async (req) => {
     const user = userData.user
     console.log('✅ User authenticated successfully:', user.id)
 
-    // Extract parameters
+    // Extract parameters with defaults
     const {
       prompt,
-      model,
       aspect_ratio = '1:1',
-      guidance_scale,
-      num_inference_steps
+      prompt_strength = 0.8
     } = requestBody
 
-    console.log('🎨 Generation parameters:', { prompt, model, aspect_ratio, guidance_scale, num_inference_steps })
+    console.log('🎨 Generation parameters:', { prompt, aspect_ratio, prompt_strength })
 
     // Create database record
     console.log('💾 Creating database record')
@@ -144,12 +123,12 @@ serve(async (req) => {
       .insert({
         user_id: user.id,
         prompt,
-        model_type: model,
+        model_type: 'flux-schnell',
         status: 'pending',
         width: aspect_ratio === '16:9' ? 1280 : aspect_ratio === '9:16' ? 720 : 1024,
         height: aspect_ratio === '16:9' ? 720 : aspect_ratio === '9:16' ? 1280 : 1024,
-        steps: model === 'flux_schnell' ? 4 : (num_inference_steps || 50),
-        cfg_scale: model === 'flux_schnell' ? 1.0 : (guidance_scale || 3.5)
+        steps: 4,
+        cfg_scale: 1.0
       })
       .select()
       .single()
@@ -199,34 +178,18 @@ serve(async (req) => {
         .update({ status: 'processing' })
         .eq('id', generationRecord.id)
 
-      // Get model version ID
-      const versionId = MODEL_VERSIONS[model as keyof typeof MODEL_VERSIONS]
-      console.log('🤖 Using model version:', versionId)
-
-      // Prepare input for Replicate API
-      const input: any = {
-        prompt: prompt,
-        aspect_ratio: aspect_ratio,
-        output_format: "webp",
-        output_quality: 90
-      }
-
-      // Add model-specific parameters
-      if (model === 'flux_dev') {
-        input.guidance_scale = guidance_scale || 3.5
-        input.num_inference_steps = num_inference_steps || 50
-      } else {
-        // Flux Schnell always uses 4 steps
-        input.num_inference_steps = 4
-      }
-
-      // Prepare Replicate API payload - ONLY version and input
+      // Prepare exact request payload that matches your successful Postman test
       const replicatePayload = {
-        version: versionId,
-        input: input
+        version: "c846a69991daf4c0e5d016514849d14ee5b2e6846ce6b9d6f21369e564cfe51e",
+        input: {
+          prompt: prompt,
+          aspect_ratio: aspect_ratio,
+          prompt_strength: prompt_strength
+        }
       }
 
-      console.log('📤 Replicate API payload:', JSON.stringify(replicatePayload, null, 2))
+      console.log('📤 Replicate API payload (exact match to successful Postman test):')
+      console.log(JSON.stringify(replicatePayload, null, 2))
 
       // Call Replicate API with retry logic
       let retryCount = 0
@@ -236,6 +199,10 @@ serve(async (req) => {
       while (retryCount <= maxRetries) {
         try {
           console.log(`📡 Calling Replicate API (attempt ${retryCount + 1})`)
+          console.log('🔗 Endpoint: https://api.replicate.com/v1/predictions')
+          console.log('🔑 Authorization: Token [REDACTED]')
+          console.log('📋 Content-Type: application/json')
+          
           response = await fetch('https://api.replicate.com/v1/predictions', {
             method: 'POST',
             headers: {
@@ -246,6 +213,7 @@ serve(async (req) => {
           })
 
           console.log('📊 Replicate API response status:', response.status)
+          console.log('📊 Replicate API response headers:', Object.fromEntries(response.headers.entries()))
 
           // Handle rate limiting
           if (response.status === 429) {
@@ -305,7 +273,8 @@ serve(async (req) => {
       }
 
       const responseText = await response.text()
-      console.log('📥 Replicate API raw response:', responseText)
+      console.log('📥 Replicate API raw response:')
+      console.log(responseText)
 
       if (!response.ok) {
         console.error('❌ Replicate API error:', response.status, responseText)
@@ -335,22 +304,28 @@ serve(async (req) => {
       let result
       try {
         result = JSON.parse(responseText)
-        console.log('✅ Parsed Replicate response:', JSON.stringify(result, null, 2))
+        console.log('✅ Parsed Replicate response:')
+        console.log(JSON.stringify(result, null, 2))
       } catch (parseError) {
         console.error('❌ Failed to parse Replicate response:', parseError)
         throw new Error(`Failed to parse Replicate response: ${responseText}`)
       }
 
       const predictionId = result.id
+      const predictionStatus = result.status
+      const pollUrl = result.urls?.get
       
       if (!predictionId) {
         console.error('❌ No prediction ID in response:', result)
         throw new Error('No prediction ID returned from Replicate')
       }
 
-      console.log('🎉 Prediction started successfully with ID:', predictionId)
+      console.log('🎉 Prediction created successfully!')
+      console.log('🆔 Prediction ID:', predictionId)
+      console.log('📊 Initial status:', predictionStatus)
+      console.log('🔗 Poll URL:', pollUrl)
 
-      // Update database with prediction ID
+      // Update database with prediction ID and poll URL
       await supabaseClient
         .from('image_generations')
         .update({ 
@@ -365,7 +340,8 @@ serve(async (req) => {
           success: true,
           generation_id: generationRecord.id,
           prediction_id: predictionId,
-          status: 'processing',
+          status: predictionStatus || 'processing',
+          poll_url: pollUrl,
           message: 'Image generation started successfully. Use the generation_id to check status.'
         }),
         {
