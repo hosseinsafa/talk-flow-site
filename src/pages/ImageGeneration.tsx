@@ -579,8 +579,8 @@ const ImageGeneration = () => {
           </div>
         </div>
 
-        {/* Bottom Input Area - unified background color */}
-        <div className="border-t border-gray-800 bg-[#121212] p-6">
+        {/* Bottom Input Area - unified background color, removed border */}
+        <div className="bg-[#121212] p-6">
           <div className="max-w-4xl mx-auto">
             {/* Input Field */}
             <div className="relative mb-6">
@@ -618,7 +618,7 @@ const ImageGeneration = () => {
               </div>
             )}
 
-            {/* Controls - removed "Show examples" button */}
+            {/* Controls - cleaned up */}
             <div className="flex items-center justify-start text-sm">
               <div className="flex items-center gap-4">
                 <Select value={settings.model} onValueChange={(value) => setSettings(prev => ({ ...prev, model: value }))}>
@@ -661,49 +661,8 @@ const ImageGeneration = () => {
                 </Button>
               </div>
 
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-gray-400 hover:text-white"
-                onClick={() => setShowExamples(true)}
-              >
-                <ChevronUp className="w-4 h-4 mr-2" />
-                Show examples
-              </Button>
+              
             </div>
-
-            {/* Advanced Settings for Flux Dev */}
-            {settings.model === 'flux_dev' && (
-              <div className="mt-4 p-4 bg-[#2A2A2A] rounded-lg border border-gray-700">
-                <h4 className="text-sm font-medium text-gray-300 mb-3">Advanced Settings</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs text-gray-400 mb-1 block">Guidance Scale: {advancedSettings.guidance_scale}</label>
-                    <input
-                      type="range"
-                      min="1"
-                      max="10"
-                      step="0.5"
-                      value={advancedSettings.guidance_scale}
-                      onChange={(e) => setAdvancedSettings(prev => ({ ...prev, guidance_scale: parseFloat(e.target.value) }))}
-                      className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-400 mb-1 block">Steps: {advancedSettings.num_inference_steps}</label>
-                    <input
-                      type="range"
-                      min="10"
-                      max="100"
-                      step="5"
-                      value={advancedSettings.num_inference_steps}
-                      onChange={(e) => setAdvancedSettings(prev => ({ ...prev, num_inference_steps: parseInt(e.target.value) }))}
-                      className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
