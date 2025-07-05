@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -24,6 +25,7 @@ interface ReplicateResponse {
   status: string;
   message: string;
   error?: string;
+  output?: string[];
 }
 
 export const useImageGeneration = () => {
@@ -83,16 +85,13 @@ export const useImageGeneration = () => {
       console.log('🚀 === STARTING REPLICATE IMAGE GENERATION ===');
       console.log('📝 Original prompt:', prompt);
       
-      // Call the replicate-generate function instead of generate-image
+      // Call the replicate-generate function
       console.log('📞 Calling replicate-generate function...');
       const functionResponse = await supabase.functions.invoke('replicate-generate', {
         body: {
           prompt: prompt,
-          model: 'flux_schnell',
-          width: 1024,
-          height: 1024,
-          steps: 4,
-          cfg_scale: 1.0
+          aspect_ratio: '1:1',
+          prompt_strength: 0.8
         }
       });
 
@@ -117,14 +116,75 @@ export const useImageGeneration = () => {
 
       console.log('✅ Replicate generation started with ID:', responseData.prediction_id);
       
-      // For now, return a placeholder - in a real implementation you'd poll for completion
-      // This is just to test the function call is working
-      return `https://via.placeholder.com/1024x1024.png?text=Generation+Started+${responseData.prediction_id}`;
+      // Poll for completion
+      const imageUrl = await pollForCompletion(responseData.prediction_id);
+      
+      if (!imageUrl) {
+        throw new Error('Failed to get image URL from completed prediction');
+      }
+
+      console.log('✅ Final image URL:', imageUrl);
+      return imageUrl;
       
     } catch (error) {
       console.error('❌ Error in Replicate generateImage:', error);
       throw error;
     }
+  };
+
+  const pollForCompletion = async (predictionId: string): Promise<string | null> => {
+    const maxAttempts = 30; // 5 minutes max
+    let attempts = 0;
+
+    while (attempts < maxAttempts) {
+      try {
+        console.log(`🔄 Polling attempt ${attempts + 1} for prediction ${predictionId}`);
+        
+        const statusResponse = await supabase.functions.invoke('replicate-status', {
+          body: { generation_id: predictionId }
+        });
+
+        if (statusResponse.error) {
+          console.error('❌ Status check error:', statusResponse.error);
+          throw new Error(`Status check failed: ${statusResponse.error.message}`);
+        }
+
+        const statusData = statusResponse.data;
+        console.log('📊 Status response:', statusData);
+
+        if (statusData.status === 'succeeded' && statusData.output) {
+          // Replicate returns output as an array of URLs
+          const imageUrl = Array.isArray(statusData.output) ? statusData.output[0] : statusData.output;
+          console.log('✅ Generation completed! Image URL:', imageUrl);
+          return imageUrl;
+        }
+
+        if (statusData.status === 'failed') {
+          console.error('❌ Generation failed:', statusData.error);
+          throw new Error(`Generation failed: ${statusData.error || 'Unknown error'}`);
+        }
+
+        if (statusData.status === 'canceled') {
+          console.error('❌ Generation was canceled');
+          throw new Error('Generation was canceled');
+        }
+
+        // Still processing, wait and retry
+        console.log(`⏳ Status: ${statusData.status}, waiting 10 seconds...`);
+        await new Promise(resolve => setTimeout(resolve, 10000));
+        attempts++;
+
+      } catch (error) {
+        console.error('❌ Error during polling:', error);
+        if (attempts >= maxAttempts - 1) {
+          throw error;
+        }
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        attempts++;
+      }
+    }
+
+    throw new Error('Generation timed out after maximum attempts');
   };
 
   const saveImageToLibrary = async (
