@@ -153,9 +153,27 @@ export const useImageGeneration = () => {
         console.log('📊 Status response:', statusData);
 
         if (statusData.status === 'succeeded' && statusData.output) {
-          // Replicate returns output as an array of URLs
-          const imageUrl = Array.isArray(statusData.output) ? statusData.output[0] : statusData.output;
-          console.log('✅ Generation completed! Image URL:', imageUrl);
+          // Clean URL extraction - handle both array and string responses
+          let imageUrl: string;
+          
+          if (Array.isArray(statusData.output)) {
+            // Extract the first URL from array and clean it
+            imageUrl = statusData.output[0];
+          } else {
+            imageUrl = statusData.output;
+          }
+          
+          // Clean the URL - remove any extra characters, quotes, or newlines
+          imageUrl = imageUrl.trim().replace(/^["']|["']$/g, '').replace(/\n/g, '');
+          
+          console.log('✅ Generation completed! Cleaned image URL:', imageUrl);
+          
+          // Validate URL format
+          if (!imageUrl.startsWith('http')) {
+            console.error('❌ Invalid URL format:', imageUrl);
+            throw new Error('Invalid image URL format received');
+          }
+          
           return imageUrl;
         }
 
