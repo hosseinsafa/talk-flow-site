@@ -277,15 +277,34 @@ const ImageGeneration = () => {
         }
 
         if (data.status === 'completed' && data.image_url) {
-          const newImage = {
-            ...data,
+          console.log('✅ Image generation completed:', data.image_url);
+          
+          // Clean the image URL to ensure it's valid
+          let cleanImageUrl = data.image_url;
+          if (Array.isArray(cleanImageUrl)) {
+            cleanImageUrl = cleanImageUrl[0];
+          }
+          cleanImageUrl = cleanImageUrl.trim().replace(/^["']|["']$/g, '').replace(/\n/g, '');
+          
+          console.log('🖼️ Adding image to gallery:', cleanImageUrl);
+          
+          const newImage: GeneratedImage = {
+            id: data.id || `gen_${Date.now()}`,
+            prompt: data.prompt || prompt,
+            image_url: cleanImageUrl,
+            status: 'completed',
+            created_at: new Date().toISOString(),
+            model_type: settings.model,
+            width: 1024,
+            height: 1024,
             aspect_ratio: settings.aspect_ratio
           };
+          
           setGeneratedImages(prev => [newImage, ...prev]);
           setSelectedImageIndex(0);
           
           // Save to image library
-          await saveToImageLibrary(data.prompt, data.image_url, settings.model, settings.aspect_ratio);
+          await saveToImageLibrary(data.prompt || prompt, cleanImageUrl, settings.model, settings.aspect_ratio);
           
           toast.success('Image generated successfully!');
           setIsGenerating(false);
@@ -502,12 +521,23 @@ const ImageGeneration = () => {
           <div className="max-w-4xl mx-auto space-y-6">
             {generatedImages.map((image, index) => (
               <div key={image.id} className="bg-[#1A1A1A] rounded-lg overflow-hidden">
-                {/* Image - 50% size preview */}
+                {/* Image - 50% size preview with error handling */}
                 <div className="relative cursor-pointer" onClick={() => setSelectedImageForModal(image)}>
                   <img
                     src={image.image_url}
                     alt={image.prompt}
                     className="w-1/2 h-auto mx-auto hover:opacity-90 transition-opacity"
+                    onError={(e) => {
+                      console.error('❌ Failed to load image:', image.image_url);
+                      console.log('🔍 Image error details:', {
+                        imageId: image.id,
+                        imageUrl: image.image_url,
+                        errorTarget: e.currentTarget
+                      });
+                    }}
+                    onLoad={() => {
+                      console.log('✅ Image loaded successfully:', image.image_url);
+                    }}
                   />
                 </div>
 
@@ -660,8 +690,6 @@ const ImageGeneration = () => {
                   Image prompt
                 </Button>
               </div>
-
-              
             </div>
           </div>
         </div>
